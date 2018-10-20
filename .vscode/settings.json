@@ -1,0 +1,29 @@
+{
+    "files.associations": {
+        "*.tcc": "c",
+        "cctype": "c",
+        "clocale": "c",
+        "cmath": "c",
+        "cstdarg": "c",
+        "cstdint": "c",
+        "cstdio": "c",
+        "cstdlib": "c",
+        "cwchar": "c",
+        "cwctype": "c",
+        "exception": "c",
+        "initializer_list": "c",
+        "iosfwd": "c",
+        "iostream": "c",
+        "istream": "c",
+        "limits": "c",
+        "new": "c",
+        "ostream": "c",
+        "stdexcept": "c",
+        "streambuf": "c",
+        "system_error": "c",
+        "type_traits": "c",
+        "typeinfo": "c",
+        "zlib.h": "c",
+        "misc.h": "c"
+    }
+}
