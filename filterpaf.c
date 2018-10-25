@@ -38,7 +38,105 @@ typedef struct{
 }alignment_t;
 
 //#define ORDERED 1
-#define NUM_MAPPINGS 100
+#define NUM_MAPPINGS 100 //max number of mappings per read
+#define LOW_THRESH_BASES 200    //lower threshold for a gap
+#define UPPER_THRESH_BASES 5000 //upper threshold for a gap
+
+#define QUAL_THRESH_UPPER 7 //upper throshold for the average qual
+#define QUAL_THRESH_LOWER 7
+
+#define AVG_WINDOW_SIZE 200 //the window size for the average of quality scores outside the gap
+
+
+#define QUAL_SCORE(qual, i) ((qual.c_str()[(i)])-33)
+
+
+void print_qual_score(alignment_t a){
+
+    for (int k=0;k<(int)a.qual.length();k++){
+        printf("%d ",QUAL_SCORE(a.qual,k));
+    }
+    cout << endl;
+}
+
+#define CHECK_QUAL_DROP_DEBUG 1
+
+int32_t check_qual_drop(alignment_t a, alignment_t b){
+
+
+    float sum,avg_prev,avg_split,avg_post;
+    
+    //check the average qual score for the area before the split
+    sum=0;
+    int32_t query_end_left = b.query_end-AVG_WINDOW_SIZE+1;
+
+    for(int k=(query_end_left < 0 ? 0 : query_end_left);k<=b.query_end;k++){
+        int32_t qual = QUAL_SCORE(a.qual,k);
+
+        if(qual<0){
+            cerr << a.qual << endl;
+            cerr << k << "\t|" << a.qual.c_str()[(k)] << "|\t" << endl;;
+        }
+        assert(qual>=0);
+        sum+=qual;
+    }
+
+    avg_prev = sum/(float)AVG_WINDOW_SIZE;
+    if(avg_prev<0){
+        cerr << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+        cerr << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+        cerr << "sum qual " << sum  << "\tavg qual " << avg_prev   << endl;
+                                         
+    }
+    assert(avg_prev>=0);
+
+#ifndef CHECK_QUAL_DROP_DEBUG 
+    if(avg_prev<=QUAL_THRESH_LOWER){
+        return 0;
+    }
+#endif
+
+    //avg qual score for the split
+    assert(b.query_end<a.query_start); 
+    sum=0;    
+    for(int k=b.query_end;k<a.query_start;k++){
+        sum+=QUAL_SCORE(a.qual,k);
+    }
+    avg_split = sum/(float)(a.query_start-b.query_end);
+    assert(avg_split>=0);
+#ifndef CHECK_QUAL_DROP_DEBUG     
+    if(avg_split>=QUAL_THRESH_UPPER){
+        return 0;
+    }
+#endif
+
+    //avg qual score after the split    
+    sum=0;
+    for(int k=a.query_start;k<a.query_start+AVG_WINDOW_SIZE && k<(int)a.qual.length() ;k++){
+        sum+=QUAL_SCORE(a.qual,k);
+    }              
+    avg_post = sum/(float)AVG_WINDOW_SIZE;    
+    assert(avg_post>=0); 
+#ifndef CHECK_QUAL_DROP_DEBUG   
+    if(avg_post<=QUAL_THRESH_LOWER){
+        return 0;
+    }
+#endif
+
+#ifdef CHECK_QUAL_DROP_DEBUG 
+    printf("avg_prev %f\tavg_split %f\tavg_post %f\t",avg_prev,avg_split,avg_post);
+#endif
+
+    if(avg_prev>QUAL_THRESH_UPPER && avg_split<QUAL_THRESH_LOWER && avg_post>QUAL_THRESH_UPPER){
+        printf("qualdrop yes\n");
+        return 1;    
+    }
+    else{
+        printf("qualdrop no\n");
+        return 0;
+    }
+}
+
 
 int filterpaf(int argc, char* argv[]){
 	
@@ -75,6 +173,7 @@ int filterpaf(int argc, char* argv[]){
 	int32_t mapped_reads=0;
 	int32_t mappings=0;
 	int32_t martian_mappings=0;
+	int32_t martian_mappings_with_qual_drop=0;
 
 
     alignment_t prev;
@@ -112,10 +211,10 @@ int filterpaf(int argc, char* argv[]){
 
         //relative strand
         pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
-        if(strcmp(pch,"+")){
+        if(strcmp(pch,"+")==0){
             curr.strand=0;
         }
-        else if(strcmp(pch,"-")){
+        else if(strcmp(pch,"-")==0){
             curr.strand=1;
         }
         else{
@@ -154,7 +253,7 @@ int filterpaf(int argc, char* argv[]){
                 if(curr.tid==prev.tid){
                     //only for the positive strand for the moment
                     if(curr.strand==0 && prev.strand==0){
-                        if(curr.query_start-prev.query_end>0 && curr.query_start-prev.query_end<5000  && curr.target_start-prev.target_end>0 && curr.target_start-prev.target_end<5000){
+                        if(curr.query_start-prev.query_end>LOW_THRESH_BASES && curr.query_start-prev.query_end<UPPER_THRESH_BASES  && curr.target_start-prev.target_end>LOW_THRESH_BASES && curr.target_start-prev.target_end<UPPER_THRESH_BASES){
                                 cout << prev.rid  << "\t" << prev.query_start << "\t" << prev.query_end << "\t" << prev.tid << "\t" << prev.target_start << "\t" << prev.target_end << endl;
                                 cout << curr.rid  << "\t" << curr.query_start << "\t" << curr.query_end << "\t" << curr.tid << "\t" << curr.target_start << "\t" << curr.target_end << endl << endl;
                                 assert(curr.qual==prev.qual);
@@ -180,14 +279,38 @@ int filterpaf(int argc, char* argv[]){
                             if(a.tid==b.tid){
                                 //only for the positive strand for the moment
                                 if(a.strand==0 && b.strand==0){
-                                    if(a.query_start-b.query_end>0 && a.query_start-b.query_end<5000  && a.target_start-b.target_end>0 && a.target_start-b.target_end<5000){
-                                            cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
-                                            cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl << endl;
+                                    
+                                    if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
+                                            cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+                                            cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
                                             assert(a.qual==b.qual);
-                                            //cout << curr.qual << endl;;
+                                            printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
+
+                                            print_qual_score(a);
+                                            if(check_qual_drop(a,b)){
+                                                martian_mappings_with_qual_drop++;
+                                            }                
+
+                                            cout <<endl;
                                             martian_mappings++;
                                     }    
 
+                                }
+                                if(a.strand==1 && b.strand==1){
+                                    if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
+                                            cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+                                            cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+                                            assert(a.qual==b.qual);
+                                            printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
+                                            
+                                            print_qual_score(a);
+                                            if(check_qual_drop(a,b)){
+                                                martian_mappings_with_qual_drop++;
+                                            }  
+                                            
+                                            cout <<endl;    
+                                            martian_mappings++;
+                                    } 
                                 }
                             }
                         }
@@ -218,8 +341,8 @@ int filterpaf(int argc, char* argv[]){
 
     }
 
-    fprintf(stderr,"[%s] Mapped reads %d, Mappings %d, Candidate mappings %d\n",
-            __func__, mapped_reads, mappings,martian_mappings);
+    fprintf(stderr,"[%s] Mapped reads %d, Mappings %d, Candidate split mappings %d, Split reads with qual drop %d\n",
+            __func__, mapped_reads, mappings,martian_mappings,martian_mappings_with_qual_drop);
     kseq_destroy(seq);
     gzclose(fp);
     fclose(paffile);
