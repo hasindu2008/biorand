@@ -42,10 +42,17 @@ typedef struct{
 #define LOW_THRESH_BASES 200    //lower threshold for a gap
 #define UPPER_THRESH_BASES 5000 //upper threshold for a gap
 
-#define QUAL_THRESH_UPPER 7 //upper throshold for the average qual
-#define QUAL_THRESH_LOWER 7
+//#define ABSOLUTE_THRESH 1
 
-#define AVG_WINDOW_SIZE 200 //the window size for the average of quality scores outside the gap
+#ifdef ABSOLUTE_THRESH
+    #define QUAL_THRESH_UPPER 7 //upper throshold for the average qual
+    #define QUAL_THRESH_LOWER 5
+#else
+    #define QUAL_THRESH 2
+    #define CHECK_QUAL_DROP_DEBUG 1
+#endif
+
+#define AVG_WINDOW_SIZE 500 //the window size for the average of quality scores outside the gap
 
 
 #define QUAL_SCORE(qual, i) ((qual.c_str()[(i)])-33)
@@ -59,7 +66,7 @@ void print_qual_score(alignment_t a){
     cout << endl;
 }
 
-#define CHECK_QUAL_DROP_DEBUG 1
+//#define CHECK_QUAL_DROP_DEBUG 1
 
 int32_t check_qual_drop(alignment_t a, alignment_t b){
 
@@ -127,7 +134,11 @@ int32_t check_qual_drop(alignment_t a, alignment_t b){
     printf("avg_prev %f\tavg_split %f\tavg_post %f\t",avg_prev,avg_split,avg_post);
 #endif
 
+#ifdef ABSOLUTE_THRESH
     if(avg_prev>QUAL_THRESH_UPPER && avg_split<QUAL_THRESH_LOWER && avg_post>QUAL_THRESH_UPPER){
+#else
+    if(avg_prev-avg_split>QUAL_THRESH && avg_post-avg_split>QUAL_THRESH){
+#endif
         printf("qualdrop yes\n");
         return 1;    
     }
@@ -285,6 +296,7 @@ int filterpaf(int argc, char* argv[]){
                                             cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
                                             assert(a.qual==b.qual);
                                             printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
+
 
                                             print_qual_score(a);
                                             if(check_qual_drop(a,b)){
