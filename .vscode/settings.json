@@ -24,6 +24,7 @@
         "type_traits": "c",
         "typeinfo": "c",
         "zlib.h": "c",
-        "misc.h": "c"
+        "misc.h": "c",
+        "biorand.h": "c"
     }
 }

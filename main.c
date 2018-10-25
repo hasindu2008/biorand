@@ -19,9 +19,8 @@
 #include "kseq.h"
 KSEQ_INIT(gzFile, gzread)
 
-#include "temp.h"
+#include "biorand.h"
 #include "misc.h"
-//double realtime0 = 0;
 
 //#define DEBUG_PRINT
 #define STEP_BASES 200
@@ -32,26 +31,26 @@ KSEQ_INIT(gzFile, gzread)
 #define QUAL_SCORE(seq, i) (((seq)->qual.s[(i)])-33)
 
 static struct option long_options[] = {
-    {"reads", required_argument, 0, 'r'},          //0
-    {"bam", required_argument, 0, 'b'},            //1
-    {"genome", required_argument, 0, 'g'},         //2
+    // {"reads", required_argument, 0, 'r'},          //0
+    // {"bam", required_argument, 0, 'b'},            //1
+    // {"genome", required_argument, 0, 'g'},         //2
     {"threads", required_argument, 0, 't'},        //3
     {"batchsize", required_argument, 0, 'K'},      //4
-    {"print", no_argument, 0, 'p'},                //5
-    {"aaaaaa", no_argument, 0, 0},                 //6
-    {"help", no_argument, 0, 'h'},                 //7
-    {"version", no_argument, 0, 'V'},              //8
-    {"min-mapq", required_argument, 0, 0},         //9
-    {"secondary", required_argument, 0, 0},        //10
-    {"kmer-model", required_argument, 0, 0},       //11
-    {"skip-unreadable", required_argument, 0, 0},  //12
-    {"print-events", required_argument, 0, 0},     //13
-    {"print-banded-aln", required_argument, 0, 0}, //14
-    {"print-scaling", required_argument, 0, 0},    //15
-    {"print-raw", required_argument, 0, 0},        //16
-    {"disable-cuda", required_argument, 0, 0},     //17
-    {"cuda-block-size",required_argument, 0, 0},   //18
-    {"debug-break",required_argument, 0, 0},   //19
+    // {"print", no_argument, 0, 'p'},                //5
+    // {"aaaaaa", no_argument, 0, 0},                 //6
+    // {"help", no_argument, 0, 'h'},                 //7
+    // {"version", no_argument, 0, 'V'},              //8
+    // {"min-mapq", required_argument, 0, 0},         //9
+    // {"secondary", required_argument, 0, 0},        //10
+    // {"kmer-model", required_argument, 0, 0},       //11
+    // {"skip-unreadable", required_argument, 0, 0},  //12
+    // {"print-events", required_argument, 0, 0},     //13
+    // {"print-banded-aln", required_argument, 0, 0}, //14
+    // {"print-scaling", required_argument, 0, 0},    //15
+    // {"print-raw", required_argument, 0, 0},        //16
+    // {"disable-cuda", required_argument, 0, 0},     //17
+    // {"cuda-block-size",required_argument, 0, 0},   //18
+    // {"debug-break",required_argument, 0, 0},   //19
     {0, 0, 0, 0}};
 
 void sig_handler(int sig) {
@@ -255,10 +254,6 @@ void  filter(int argc, char* argv[]) {
     int longindex = 0;
     int32_t c = -1;
 
-    // char* bamfilename = NULL;
-    // char* fastafile = NULL;
-    // char* fastqfile = NULL;
-
     optind=2;
 
     opt_t opt;
@@ -289,10 +284,11 @@ void  filter(int argc, char* argv[]) {
                       opt.num_thread);
                 exit(EXIT_FAILURE);
             }
-        } else if (c == 0 && longindex == 9) {
-            opt.min_mapq =
-                atoi(optarg); //check whether this is between 0 and 60
-		}
+        }
+        // } else if (c == 0 && longindex == 9) {
+        //     opt.min_mapq =
+        //         atoi(optarg); //check whether this is between 0 and 60
+		// }
         // } else if (c == 0 && longindex == 10) { //consider secondary
             // yes_or_no(&opt, F5C_SECONDARY_YES, longindex, optarg, 1);
         // } else if (c == 0 && longindex == 11) {
@@ -349,110 +345,12 @@ void  filter(int argc, char* argv[]) {
         pthread_db(core,0,process_single);    
     }
 	
-    
-
- // #ifndef IO_PROC_INTERLEAVE   
-    // db_t* db = init_db(core);
-
-    // int32_t status = db->capacity_bam_rec;
-    // while (status >= db->capacity_bam_rec) {
-        // status = load_db(core, db);
-
-        // fprintf(stderr, "[%s::%.3f*%.2f] %d Entries loaded\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // status);
-
-        // process_db(core, db);
-
-        // fprintf(stderr, "[%s::%.3f*%.2f] %d Entries processed\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // status);
-        // output_db(core, db);
-        // free_db_tmp(db);
-        // if(opt.flag & F5C_DEBUG_BRK){
-            // break;
-        // }
-    // }
-    // free_db(db);
-
-// #else
-    // int32_t status = core->opt.batch_size;
-    // int8_t first_flag_p=0;
-    // int8_t first_flag_pp=0;
-    // pthread_t tid_p;
-    // pthread_t tid_pp;
-
-
-    // while (status >= core->opt.batch_size) {
-        // db_t* db = init_db(core);
-        // status = load_db(core, db);
-
-        // fprintf(stderr, "[%s::%.3f*%.2f] %d Entries loaded\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // status);
-
-        // if(first_flag_p){
-            // int ret = pthread_join(tid_p, NULL);
-            // fprintf(stderr, "[%s::%.3f*%.2f] Joined to thread %lu\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // tid_p);
-            // NEG_CHK(ret);
-        // }
-        // first_flag_p=1;
-
-        // pthread_arg2_t *pt_arg = (pthread_arg2_t*)malloc(sizeof(pthread_arg2_t));
-        // pt_arg->core=core;
-        // pt_arg->db=db;
-        // pt_arg->cond = PTHREAD_COND_INITIALIZER;
-        // pt_arg->mutex = PTHREAD_MUTEX_INITIALIZER;
-        // int ret = pthread_create(&tid_p, NULL, pthread_processor,
-                                // (void*)(pt_arg));
-        // NEG_CHK(ret);
-        // fprintf(stderr, "[%s::%.3f*%.2f] Spawned thread %lu\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // tid_p);
-
-        // if(first_flag_pp){
-            // int ret = pthread_join(tid_pp, NULL);
-            // fprintf(stderr, "[%s::%.3f*%.2f] Joined to thread %lu\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // tid_pp);
-            // NEG_CHK(ret);
-        // }
-        // first_flag_pp=1;
-
-
-        // ret = pthread_create(&tid_pp, NULL, pthread_post_processor,
-                                // (void*)(pt_arg));
-        // NEG_CHK(ret);
-        // fprintf(stderr, "[%s::%.3f*%.2f] Spawned thread %lu\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // tid_pp);
-
-        // if(opt.flag & F5C_DEBUG_BRK){
-            // break;
-        // }
-    // }
-    // int ret = pthread_join(tid_p, NULL);
-    // NEG_CHK(ret);
-    // fprintf(stderr, "[%s::%.3f*%.2f] Joined to thread %lu\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // tid_p);
-    // ret = pthread_join(tid_pp, NULL);
-    // NEG_CHK(ret);
-    // fprintf(stderr, "[%s::%.3f*%.2f] Joined to thread %lu\n", __func__,
-                // realtime() - realtime0, cputime() / (realtime() - realtime0),
-                // tid_pp);
-
-
-// #endif
 
     free_core(core);
 
     return ;
 }
 
-int filterpaf(int argc, char* argv[]);
 
 int main(int argc, char* argv[]) {
     

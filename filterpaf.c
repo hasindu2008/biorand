@@ -14,7 +14,7 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 
-#include "temp.h"
+#include "biorand.h"
 #include "misc.h"
 #include <zlib.h>
 #include "kseq.h"
