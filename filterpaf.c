@@ -149,7 +149,7 @@ int32_t check_qual_drop(alignment_t a, alignment_t b){
 }
 
 
-int filterpaf(int argc, char* argv[]){
+void filterpaf(int argc, char* argv[]){
 	
     optind=2;
 

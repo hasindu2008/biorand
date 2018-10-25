@@ -87,6 +87,7 @@ core_t* init_core(opt_t opt,double realtime0);
 void pthread_db(core_t* core, db_t* db, void (*func)(core_t*,db_t*,int));
 void free_core(core_t* core);
 void init_opt(opt_t* opt);
-int filterpaf(int argc, char* argv[]);
+void filterpaf(int argc, char* argv[]);
+void  filterfq(int argc, char* argv[]);
 
 #endif
