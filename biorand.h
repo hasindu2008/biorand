@@ -89,5 +89,6 @@ void free_core(core_t* core);
 void init_opt(opt_t* opt);
 void filterpaf(int argc, char* argv[]);
 void  filterfq(int argc, char* argv[]);
+void  comparesam(int argc, char* argv[]);
 
 #endif
