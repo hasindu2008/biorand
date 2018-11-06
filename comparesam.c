@@ -21,7 +21,7 @@
 #include <iostream>
 using namespace std;
 
-#define NUM_MAPPINGS 1
+#define NUM_MAPPINGS 1 //dont chnage this. only supports primary at the moment
 #define F_UNMAPPED 0x04
 #define F_SECONDARY 0x100
 #define F_SUPPLEMENTARY 0x800
@@ -66,6 +66,11 @@ typedef struct{
     int32_t mismatches=0;
     int32_t only_in_a=0;
     int32_t only_in_b=0;
+
+    FILE* f_only_in_a;
+    FILE* f_only_in_b;
+    FILE* f_mismatches;
+
 } compare_stat_t;
 
 void insert_alignment(sam_stat_t *read, alignment_t *sam_entry){
@@ -103,6 +108,7 @@ void parse_sam_entry(alignment_t *sam_entry, char *buffer){
         
         //MAPQ
         pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
+        sam_entry->mapq = atoi(pch);
         
         //CIGAR
         pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
@@ -134,6 +140,7 @@ void parse_sam_entry(alignment_t *sam_entry, char *buffer){
             int32_t as;
             int32_t ret=sscanf(pch,"AS:i:%d",&as);
             assert(ret>0);
+            sam_entry->score=as;
         }
 }
 
@@ -143,12 +150,20 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
         compare->unmapped_in_both++;
         return;
     }
+    //only in b
     if(readb->mapping_of_reads_n>0 && reada->mapping_of_reads_n==0){
-        compare->only_in_b++;
+        compare->only_in_b++;    
+        alignment_t b = readb->mapping_of_reads[0];
+        fprintf(compare->f_only_in_b,"%s\t%s\t%d\t%d\t%d\n",b.rid.c_str(),
+        b.tid.c_str(),b.target_start,b.mapq, b.score);
         return;
     }
+    //only in a
     if(reada->mapping_of_reads_n>0 && readb->mapping_of_reads_n==0){
         compare->only_in_a++;
+        alignment_t a = reada->mapping_of_reads[0];
+        fprintf(compare->f_only_in_a,"%s\t%s\t%d\t%d\t%d\n",a.rid.c_str(),
+        a.tid.c_str(),a.target_start,a.mapq, a.score);
         return;
     }
 
@@ -175,12 +190,16 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
     }
     else{
         compare->mismatches++;
+        alignment_t a = reada->mapping_of_reads[0];
+        alignment_t b = readb->mapping_of_reads[0];
+        fprintf(compare->f_mismatches,"%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%d\n",a.rid.c_str(),
+        a.tid.c_str(),a.target_start,a.mapq, a.score,b.tid.c_str(),b.target_start,b.mapq, b.score);
     }
 
 }
 
 void print_sam_stat(char * filename, sam_stat_t* a){
-    printf("File a\t%s\n"
+    printf("File %s\n"
     "Number of entries\t%d\n"
     "Total number of alignments\t%d\n"
     "Number of mapped reads\t%d\n"
@@ -279,6 +298,12 @@ void comparesam(int argc, char* argv[]){
     sam_stat_t b;
 
     compare_stat_t compare;
+    compare.f_only_in_a=fopen("only_in_a.tsv","w");
+    fprintf(compare.f_only_in_a,"readID\ttarget\ttarget_pos\tmapq\tAS\n");
+    compare.f_only_in_b=fopen("only_in_b.tsv","w");
+    fprintf(compare.f_only_in_b,"readID\ttarget\ttarget_pos\tmapq\tAS\n");
+    compare.f_mismatches=fopen("mismatches.tsv","w");
+    fprintf(compare.f_mismatches,"readID\ttarget_a\ttarget_pos_a\tmapq_a\tAS_a\ttarget_b\ttarget_pos_b\tmapq_b\tAS_b\n");
 
     int8_t state=0;
 
@@ -418,7 +443,9 @@ void comparesam(int argc, char* argv[]){
     print_sam_stat(argv[optind+1],&b);
     print_compare_stat(&compare);
 
-
+    fclose(compare.f_mismatches);
+    fclose(compare.f_only_in_a);
+    fclose(compare.f_only_in_b);
     fclose(samfile_a);
     fclose(samfile_b);
     free(buffer_a);
