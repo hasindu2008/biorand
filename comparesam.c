@@ -26,7 +26,7 @@ using namespace std;
 #define F_SECONDARY 0x100
 #define F_SUPPLEMENTARY 0x800
 
-
+#define OVERLAP_BASED_EVAL 1
 #define DEBUG_LOOP 1
 
 typedef struct{
@@ -36,10 +36,11 @@ typedef struct{
     //int8_t strand;
     string tid;
     int32_t target_start;
-    //int32_t target_end;
+    int32_t target_end;
     int32_t mapq;
     int32_t score;
     int32_t flag;
+    char strand; //for convenience
 
     //string qual;
 
@@ -88,6 +89,52 @@ void insert_alignment(sam_stat_t *read, alignment_t *sam_entry){
 
 }
 
+#ifdef OVERLAP_BASED_EVAL 
+//from https://www.biostars.org/p/17891/
+static inline int32_t cigar_to_aln(char *cigar,int32_t pos){
+    char *c = cigar;
+    int32_t pos_end=pos;
+    // int32_t n_gap = 0, mlen = 0;
+    while(*c!=0){
+        char* p2;
+        if(!isdigit(*c)){
+            fprintf(stderr,"bad cigar string1: %s\n",cigar);
+            exit(EXIT_FAILURE);
+        }
+        int32_t len=strtol(c,&p2,10);
+        if(len<=0){
+            fprintf(stderr,"bad cigar string2: %s\n",cigar);
+            exit(EXIT_FAILURE);
+        }
+        switch(*p2){
+            case 'M':
+            {
+                pos_end += len; 
+                // mlen += len;
+                break;
+            }
+            case 'D':
+            {
+                // n_gap += len;
+                pos_end += len;
+                break;
+            }
+            // case 'I':
+            // {
+            //    n_gap += len; 
+            // }
+
+            default:
+            {
+                break;
+            }
+        }
+        c=p2+1;
+    }
+    return pos_end;
+}
+#endif
+
 void parse_sam_entry(alignment_t *sam_entry, char *buffer){
         //read name
         char *pch = strtok (buffer,"\t\r\n"); assert(pch!=NULL);
@@ -97,38 +144,43 @@ void parse_sam_entry(alignment_t *sam_entry, char *buffer){
         pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
         sam_entry->flag = atoi(pch);
 
-      
-        //RNAME
-        pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
-        sam_entry->tid = pch;
+        if(!(sam_entry->flag & 0x04)){        
+            sam_entry->strand = (sam_entry->flag&16)? '-' : '+';
+
+            //RNAME
+            pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
+            sam_entry->tid = pch;
+            
+            //POS
+            pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
+            sam_entry->target_start = atoi(pch);
+            
+            //MAPQ
+            pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
+            sam_entry->mapq = atoi(pch);
+            
+            //CIGAR
+            pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
+        #ifdef OVERLAP_BASED_EVAL
+            sam_entry->target_end = cigar_to_aln(pch,sam_entry->target_start);
+        #endif
+            
+            //RNEXT
+            pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
+            
+            //PNEXT
+            pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
+            
+            //TLEN
+            pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
+            
+            //SEQ
+            pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
+            
+            //QUAL
+            pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
         
-        //POS
-        pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
-        sam_entry->target_start = atoi(pch);
         
-        //MAPQ
-        pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        sam_entry->mapq = atoi(pch);
-        
-        //CIGAR
-        pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        
-        //RNEXT
-        pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        
-        //PNEXT
-        pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        
-        //TLEN
-        pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        
-        //SEQ
-        pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        
-        //QUAL
-        pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        
-        if(!(sam_entry->flag & 0x04)){
             //NM
             pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
             
@@ -144,6 +196,35 @@ void parse_sam_entry(alignment_t *sam_entry, char *buffer){
         }
 }
 
+static inline int8_t is_correct_exact(alignment_t a, alignment_t b){
+    if(a.tid==b.tid && a.target_start==b.target_start && a.strand==b.strand){
+        return 1;
+    }
+    else{
+        return 0;
+    }
+
+}
+
+#ifdef OVERLAP_BASED_EVAL 
+//adapted from paftools
+#define ovlp_ratio 0.1
+int8_t is_correct_overlap(alignment_t a, alignment_t b)
+{
+    if (a.tid != b.tid || a.strand != b.strand) return 0;
+    float o, l;
+    if (a.target_start < b.target_start) {
+        if (a.target_end <= b.target_start) return 0;
+        o = (a.target_end < b.target_end? a.target_end : b.target_end) - b.target_start;
+        l = (a.target_end > b.target_end? a.target_end : b.target_end) - a.target_start;
+    } else {
+        if (b.target_end <= a.target_start) return 0;
+        o = (a.target_end < b.target_end? a.target_end : b.target_end) - a.target_start;
+        l = (a.target_end > b.target_end? a.target_end : b.target_end) - b.target_start;
+    }
+    return o/l > ovlp_ratio? 1 : 0;
+}
+#endif
 
 void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *readb){
     if(reada->mapping_of_reads_n==0 && readb->mapping_of_reads_n==0){
@@ -176,10 +257,17 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
                     cout << a.rid << '\t' << b.rid <<endl;
                 }
                 assert(a.rid==b.rid);
+            #ifndef OVERLAP_BASED_EVAL 
                 //same mapping
-                if(a.tid==b.tid && a.target_start==b.target_start){
-                    flag++;    
+                if(is_correct_exact(a,b)){
+                    flag++; 
                 }
+            #else
+                if(is_correct_overlap(a,b)){
+                    flag++; 
+                }
+            #endif
+
             
         }
     }  
