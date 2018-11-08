@@ -58,6 +58,8 @@ autom4te.cache
 /main
 /test
 /f5c
+/biorand
+/*.tsv
 /*.fast5
 *.fig
 /*.fa
