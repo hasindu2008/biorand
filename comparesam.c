@@ -21,12 +21,14 @@
 #include <iostream>
 using namespace std;
 
-#define NUM_MAPPINGS 1 //dont chnage this. only supports primary at the moment
+#define NUM_MAPPINGS 200 //dont chnage this. only supports primary at the moment
 #define F_UNMAPPED 0x04
 #define F_SECONDARY 0x100
 #define F_SUPPLEMENTARY 0x800
 
 #define OVERLAP_BASED_EVAL 1
+#define CONSIDER_SUPPLEMENTARY 1
+#define CONSIDER_SECONDARY 1 //works only if supplemetary are considered
 #define DEBUG_LOOP 1
 
 typedef struct{
@@ -67,6 +69,8 @@ typedef struct{
     int32_t mismatches=0;
     int32_t only_in_a=0;
     int32_t only_in_b=0;
+    int32_t pri_a_to_supp_b=0;
+    int32_t pri_a_to_sec_b=0;
 
     FILE* f_only_in_a;
     FILE* f_only_in_b;
@@ -76,7 +80,15 @@ typedef struct{
 
 void insert_alignment(sam_stat_t *read, alignment_t *sam_entry){
 
-    if((sam_entry->flag & (F_UNMAPPED|F_SECONDARY|F_SUPPLEMENTARY))==0){    
+#ifndef CONSIDER_SUPPLEMENTARY
+    if((sam_entry->flag & (F_UNMAPPED|F_SECONDARY|F_SUPPLEMENTARY))==0){ 
+#else
+    #ifndef CONSIDER_SECONDARY
+        if((sam_entry->flag & (F_UNMAPPED|F_SECONDARY))==0){ 
+    #else
+        if((sam_entry->flag & (F_UNMAPPED))==0){
+    #endif
+#endif
         if(read->mapping_of_reads_n>=NUM_MAPPINGS){
             fprintf(stderr,"Too many mapping for read %s\n",sam_entry->rid.c_str());
             fprintf(stderr,"Flag %d\n",sam_entry->flag);
@@ -257,6 +269,7 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
                     cout << a.rid << '\t' << b.rid <<endl;
                 }
                 assert(a.rid==b.rid);
+        #ifndef CONSIDER_SUPPLEMENTARY        
             #ifndef OVERLAP_BASED_EVAL 
                 //same mapping
                 if(is_correct_exact(a,b)){
@@ -267,8 +280,38 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
                     flag++; 
                 }
             #endif
+        #else
+                //in a only take primaries
+                if((a.flag&(F_SUPPLEMENTARY|F_SECONDARY))==0){
 
-            
+                    #ifndef OVERLAP_BASED_EVAL 
+                        //same mapping
+                        if(is_correct_exact(a,b)){
+                            flag++;
+                            if(b.flag&F_SECONDARY){
+                                compare->pri_a_to_sec_b++;
+                            }
+                            else if(b.flag&F_SUPPLEMENTARY){
+                                compare->pri_a_to_supp_b++;
+                            }
+                            break;
+                        }
+                    #else
+                        if(is_correct_overlap(a,b)){
+                            flag++; 
+                            if(b.flag&F_SECONDARY){
+                                compare->pri_a_to_sec_b++;
+                            }
+                            else if(b.flag&F_SUPPLEMENTARY){
+                                compare->pri_a_to_supp_b++;
+                            }
+                            break;
+                        }
+                    #endif
+
+
+                }
+        #endif    
         }
     }  
 
@@ -305,6 +348,13 @@ void print_compare_stat(compare_stat_t *compare){
     "Only in A\t%d\n"
     "Only in B\t%d\n"
     ,compare->unmapped_in_both,compare->same, compare->mismatches, compare->only_in_a, compare->only_in_b);
+#ifdef CONSIDER_SUPPLEMENTARY
+    printf("Primary in a is a supplementary in b\t%d\n",compare->pri_a_to_supp_b);
+#endif
+#ifdef CONSIDER_SECONDARY
+    printf("Primary in a is a supplementary in b\t%d\n",compare->pri_a_to_sec_b);
+#endif
+
 }
 void update_sam_stat(sam_stat_t* a,alignment_t curr_a){
     a->num_entries++;
