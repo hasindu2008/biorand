@@ -21,12 +21,12 @@
 #include <iostream>
 using namespace std;
 
-#define NUM_MAPPINGS 200 //dont chnage this. only supports primary at the moment
+#define NUM_MAPPINGS 300 //dont chnage this. only supports primary at the moment
 #define F_UNMAPPED 0x04
 #define F_SECONDARY 0x100
 #define F_SUPPLEMENTARY 0x800
 
-#define OVERLAP_BASED_EVAL 1
+//#define OVERLAP_BASED_EVAL 1
 #define CONSIDER_SUPPLEMENTARY 1
 #define CONSIDER_SECONDARY 1 //works only if supplemetary are considered
 #define DEBUG_LOOP 1
@@ -76,6 +76,11 @@ typedef struct{
     FILE* f_only_in_b;
     FILE* f_mismatches;
 
+    FILE* f_only_in_a_bed;
+    FILE* f_only_in_b_bed;
+    FILE* f_mismatches_bed_a;
+    FILE* f_mismatches_bed_b;
+
 } compare_stat_t;
 
 void insert_alignment(sam_stat_t *read, alignment_t *sam_entry){
@@ -101,7 +106,7 @@ void insert_alignment(sam_stat_t *read, alignment_t *sam_entry){
 
 }
 
-#ifdef OVERLAP_BASED_EVAL 
+
 //from https://www.biostars.org/p/17891/
 static inline int32_t cigar_to_aln(char *cigar,int32_t pos){
     char *c = cigar;
@@ -145,7 +150,7 @@ static inline int32_t cigar_to_aln(char *cigar,int32_t pos){
     }
     return pos_end;
 }
-#endif
+
 
 void parse_sam_entry(alignment_t *sam_entry, char *buffer){
         //read name
@@ -173,9 +178,8 @@ void parse_sam_entry(alignment_t *sam_entry, char *buffer){
             
             //CIGAR
             pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
-        #ifdef OVERLAP_BASED_EVAL
             sam_entry->target_end = cigar_to_aln(pch,sam_entry->target_start);
-        #endif
+
             
             //RNEXT
             pch = strtok (NULL,"\t\r\n");  assert(pch!=NULL);
@@ -249,6 +253,11 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
         alignment_t b = readb->mapping_of_reads[0];
         fprintf(compare->f_only_in_b,"%s\t%s\t%d\t%d\t%d\n",b.rid.c_str(),
         b.tid.c_str(),b.target_start,b.mapq, b.score);
+
+        //0 index start
+        fprintf(compare->f_only_in_b_bed,"%s\t%d\t%d\t%s\t%d\t%c\t%d\n",b.tid.c_str(),b.target_start-1,
+        b.target_end,b.rid.c_str(),b.score,b.strand,b.mapq);
+
         return;
     }
     //only in a
@@ -257,6 +266,11 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
         alignment_t a = reada->mapping_of_reads[0];
         fprintf(compare->f_only_in_a,"%s\t%s\t%d\t%d\t%d\n",a.rid.c_str(),
         a.tid.c_str(),a.target_start,a.mapq, a.score);
+
+        //0 index start //1 based end
+        fprintf(compare->f_only_in_a_bed,"%s\t%d\t%d\t%s\t%d\t%c\t%d\n",a.tid.c_str(),a.target_start-1,
+        a.target_end,a.rid.c_str(),a.score,a.strand,a.mapq);
+
         return;
     }
 
@@ -325,6 +339,13 @@ void compare_alnread(compare_stat_t *compare, sam_stat_t *reada,sam_stat_t *read
         alignment_t b = readb->mapping_of_reads[0];
         fprintf(compare->f_mismatches,"%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%d\n",a.rid.c_str(),
         a.tid.c_str(),a.target_start,a.mapq, a.score,b.tid.c_str(),b.target_start,b.mapq, b.score);
+
+        //0 index start //1 based end
+        fprintf(compare->f_mismatches_bed_a,"%s\t%d\t%d\t%s\t%d\t%c\t%d\n",a.tid.c_str(),a.target_start-1,
+        a.target_end,a.rid.c_str(),a.score,a.strand,a.mapq);
+        fprintf(compare->f_mismatches_bed_b,"%s\t%d\t%d\t%s\t%d\t%c\t%d\n",b.tid.c_str(),b.target_start-1,
+        b.target_end,b.rid.c_str(),b.score,b.strand,b.mapq);
+
     }
 
 }
@@ -349,10 +370,10 @@ void print_compare_stat(compare_stat_t *compare){
     "Only in B\t%d\n"
     ,compare->unmapped_in_both,compare->same, compare->mismatches, compare->only_in_a, compare->only_in_b);
 #ifdef CONSIDER_SUPPLEMENTARY
-    printf("Primary in a is a supplementary in b\t%d\n",compare->pri_a_to_supp_b);
+    printf("Primary in 'a' is a supplementary in 'b'\t%d\n",compare->pri_a_to_supp_b);
 #endif
 #ifdef CONSIDER_SECONDARY
-    printf("Primary in a is a supplementary in b\t%d\n",compare->pri_a_to_sec_b);
+    printf("Primary in 'a' is a secondary in 'b'\t%d\n",compare->pri_a_to_sec_b);
 #endif
 
 }
@@ -442,6 +463,13 @@ void comparesam(int argc, char* argv[]){
     fprintf(compare.f_only_in_b,"readID\ttarget\ttarget_pos\tmapq\tAS\n");
     compare.f_mismatches=fopen("mismatches.tsv","w");
     fprintf(compare.f_mismatches,"readID\ttarget_a\ttarget_pos_a\tmapq_a\tAS_a\ttarget_b\ttarget_pos_b\tmapq_b\tAS_b\n");
+
+    compare.f_only_in_a_bed=fopen("only_in_a.bed","w");
+    compare.f_only_in_b_bed=fopen("only_in_b.bed","w");
+    compare.f_mismatches_bed_a=fopen("mismatches_a.bed","w");
+    compare.f_mismatches_bed_b=fopen("mismatches_b.bed","w");
+
+
 
     int8_t state=0;
 
@@ -581,6 +609,10 @@ void comparesam(int argc, char* argv[]){
     print_sam_stat(argv[optind+1],&b);
     print_compare_stat(&compare);
 
+    fclose(compare.f_mismatches_bed_a);
+    fclose(compare.f_mismatches_bed_b);
+    fclose(compare.f_only_in_a_bed);
+    fclose(compare.f_only_in_b_bed);
     fclose(compare.f_mismatches);
     fclose(compare.f_only_in_a);
     fclose(compare.f_only_in_b);
