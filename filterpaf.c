@@ -54,6 +54,7 @@ typedef struct{
 
 #define AVG_WINDOW_SIZE 500 //the window size for the average of quality scores outside the gap
 
+#define GAP_DIFF_RATIO 1000
 
 #define QUAL_SCORE(qual, i) ((qual.c_str()[(i)])-33)
 
@@ -67,6 +68,7 @@ void print_qual_score(alignment_t a){
 }
 
 //#define CHECK_QUAL_DROP_DEBUG 1
+
 
 int32_t check_qual_drop(alignment_t a, alignment_t b){
 
@@ -288,7 +290,6 @@ void filterpaf(int argc, char* argv[]){
                             alignment_t a = mapping_of_reads[i];
                             alignment_t b = mapping_of_reads[j];
                             if(a.tid==b.tid){
-                                //only for the positive strand for the moment
                                 if(a.strand==0 && b.strand==0){
                                     
                                     if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
@@ -299,10 +300,12 @@ void filterpaf(int argc, char* argv[]){
 
 
                                             print_qual_score(a);
-                                            if(check_qual_drop(a,b)){
-                                                martian_mappings_with_qual_drop++;
-                                            }                
 
+                                            if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                                                if(check_qual_drop(a,b)){
+                                                    martian_mappings_with_qual_drop++;
+                                                }                
+                                            }
                                             cout <<endl;
                                             martian_mappings++;
                                     }    
@@ -316,9 +319,11 @@ void filterpaf(int argc, char* argv[]){
                                             printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
                                             
                                             print_qual_score(a);
-                                            if(check_qual_drop(a,b)){
-                                                martian_mappings_with_qual_drop++;
-                                            }  
+                                            if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                                                if(check_qual_drop(a,b)){
+                                                    martian_mappings_with_qual_drop++;
+                                                }  
+                                            }
                                             
                                             cout <<endl;    
                                             martian_mappings++;
