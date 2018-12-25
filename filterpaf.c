@@ -54,7 +54,7 @@ typedef struct{
 
 #define AVG_WINDOW_SIZE 500 //the window size for the average of quality scores outside the gap
 
-#define GAP_DIFF_RATIO 1000
+#define GAP_DIFF_RATIO 0.1
 
 #define QUAL_SCORE(qual, i) ((qual.c_str()[(i)])-33)
 
@@ -184,10 +184,14 @@ void filterpaf(int argc, char* argv[]){
     char *pch=NULL;
 
 	int32_t mapped_reads=0;
-	int32_t mappings=0;
-	int32_t martian_mappings=0;
+	int32_t mappings_total=0;
+	int32_t split_mappings=0;
+	int32_t split_mappings_same_gap=0;
 	int32_t martian_mappings_with_qual_drop=0;
 
+
+    FILE* bedfile = fopen("candidates.bed","w");
+    F_CHK(bedfile,"candidates.bed");
 
     alignment_t prev;
     prev.rid = "";
@@ -250,7 +254,7 @@ void filterpaf(int argc, char* argv[]){
         pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
         curr.target_end= atoi(pch);
 
-        mappings++;
+        mappings_total++;
 
         if(curr.rid==prev.rid ){
 
@@ -300,14 +304,18 @@ void filterpaf(int argc, char* argv[]){
 
 
                                             print_qual_score(a);
-
-                                            if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                                            assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
+                                            //if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                                            if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                                                split_mappings_same_gap++;
                                                 if(check_qual_drop(a,b)){
+                                                    //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
+                                                    fprintf(bedfile,"%s\t%d\t%d\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE);
                                                     martian_mappings_with_qual_drop++;
                                                 }                
                                             }
                                             cout <<endl;
-                                            martian_mappings++;
+                                            split_mappings++;
                                     }    
 
                                 }
@@ -318,15 +326,19 @@ void filterpaf(int argc, char* argv[]){
                                             assert(a.qual==b.qual);
                                             printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
                                             
+                                            assert(a.query_start-b.query_end>=0 && b.target_start-a.target_end>=0);
                                             print_qual_score(a);
-                                            if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                                            //if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                                            if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                                                split_mappings_same_gap++;
                                                 if(check_qual_drop(a,b)){
+                                                    fprintf(bedfile,"%s\t%d\t%d\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,b.target_start+1+AVG_WINDOW_SIZE);
                                                     martian_mappings_with_qual_drop++;
                                                 }  
                                             }
                                             
                                             cout <<endl;    
-                                            martian_mappings++;
+                                            split_mappings++;
                                     } 
                                 }
                             }
@@ -358,10 +370,24 @@ void filterpaf(int argc, char* argv[]){
 
     }
 
-    fprintf(stderr,"[%s] Mapped reads %d, Mappings %d, Candidate split mappings %d, Split reads with qual drop %d\n",
-            __func__, mapped_reads, mappings,martian_mappings,martian_mappings_with_qual_drop);
+    fprintf(stderr,"[%s] Mapped reads %d, Total number of mappings %d\n"
+                   "        Split mappings (min gap %d, max gap %d) : %d\n"
+                   "             - similar gap in both read and ref (similarity ratio %.1f) : %d\n",
+                    __func__, mapped_reads, mappings_total,
+                    LOW_THRESH_BASES,UPPER_THRESH_BASES,split_mappings,
+                    GAP_DIFF_RATIO,split_mappings_same_gap);
+
+#ifdef ABSOLUTE_THRESH
+    fprintf(stderr,"                 - with qual drop (min qual %d, max qual %d, window outside gap %d) : %d\n",
+            QUAL_THRESH_LOWER, QUAL_THRESH_UPPER,AVG_WINDOW_SIZE, martian_mappings_with_qual_drop);
+#else
+    fprintf(stderr,"                 - with qual drop (relative drop of %d, window outside gap %d) : %d\n",
+                    QUAL_THRESH,AVG_WINDOW_SIZE, martian_mappings_with_qual_drop);
+#endif
+
     kseq_destroy(seq);
     gzclose(fp);
     fclose(paffile);
+    fclose(bedfile);
     free(buffer);
 }
