@@ -310,7 +310,8 @@ void filterpaf(int argc, char* argv[]){
                                                 split_mappings_same_gap++;
                                                 if(check_qual_drop(a,b)){
                                                     //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
-                                                    fprintf(bedfile,"%s\t%d\t%d\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE);
+                                                    fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
+                                                    a.rid.c_str(),a.target_start-b.target_end, '+');
                                                     martian_mappings_with_qual_drop++;
                                                 }                
                                             }
@@ -332,7 +333,8 @@ void filterpaf(int argc, char* argv[]){
                                             if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
                                                 split_mappings_same_gap++;
                                                 if(check_qual_drop(a,b)){
-                                                    fprintf(bedfile,"%s\t%d\t%d\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,b.target_start+1+AVG_WINDOW_SIZE);
+                                                    fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
+                                                    b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
                                                     martian_mappings_with_qual_drop++;
                                                 }  
                                             }
