@@ -24,9 +24,15 @@ KSEQ_INIT(gzFile, gzread)
 
 //#define DEBUG_PRINT
 #define STEP_BASES 200
-#define QUAL_THRESH_UPPER 7
-#define QUAL_THRESH_LOWER 5
 
+//#define ABSOLUTE_THRESH 1
+
+#ifdef ABSOLUTE_THRESH
+    #define QUAL_THRESH_UPPER 7 //upper throshold for the average qual
+    #define QUAL_THRESH_LOWER 5
+#else
+    #define QUAL_THRESH 2
+#endif
 
 #define QUAL_SCORE(seq, i) (((seq)->qual.s[(i)])-33)
 
@@ -160,7 +166,11 @@ void process_single(core_t* core, db_t* db, int32_t optind) {
 
         for(i=0;i<l-STEP_BASES-STEP_BASES-STEP_BASES;i++){
             assert(i+STEP_BASES+STEP_BASES < l-STEP_BASES);
+        #ifdef ABSOLUTE_THRESH
             if(mov_avg[i]>QUAL_THRESH_UPPER && mov_avg[i+STEP_BASES]<QUAL_THRESH_LOWER && mov_avg[i+STEP_BASES+STEP_BASES]>QUAL_THRESH_UPPER){
+        #else 
+            if(mov_avg[i]-mov_avg[i+STEP_BASES] > QUAL_THRESH  &&  mov_avg[i+STEP_BASES+STEP_BASES]-mov_avg[i+STEP_BASES] > QUAL_THRESH){
+        #endif    
                 flag=1;
                 pos[pos_index]=i+STEP_BASES+STEP_BASES/2;
                 pos_index++;
