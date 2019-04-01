@@ -171,7 +171,7 @@ void filterpaf(int argc, char* argv[]){
     int l;
  
     fp = gzopen(argv[optind+1], "r");
-    F_CHK(fp,argv[optind]);
+    F_CHK(fp,argv[optind+1]);
 
     seq = kseq_init(fp);
     MALLOC_CHK(seq);
