@@ -64,18 +64,31 @@ typedef struct{
                    <--> 
 ref  : ----------------------------
            |      |    |      |
-read :     --------    --------
+read :     --------------------
                    <-->
                 query gap 
 */
-//  LOW_THRESH_BASES < query gaps < UPPER_THRESH_BASES
 
-#define LOW_THRESH_BASES 200    //lower threshold for a query gap 
-#define UPPER_THRESH_BASES 5000 //upper threshold for a query gap 
-
-
-// |quary gap - target gap| < |target gap * GAP_DIFF_RATIO|
+// profile for martin filters
+//  LOW_THRESH_BASES_QUERY < query gaps < UPPER_THRESH_BASES_QUERY
+#define LOW_THRESH_BASES_QUERY 200    //lower threshold for a query gap 
+#define UPPER_THRESH_BASES_QUERY 5000 //upper threshold for a query gap 
+//  LOW_THRESH_BASES_TARGET < target gaps < UPPER_THRESH_BASES_TARGET
+#define LOW_THRESH_BASES_TARGET 200    //lower threshold for a target gap 
+#define UPPER_THRESH_BASES_TARGET 5000 //upper threshold for a target gap 
+// |query gap - target gap| < |target gap * GAP_DIFF_RATIO|
 #define GAP_DIFF_RATIO 0.1
+
+// // profile for insersions
+// //  LOW_THRESH_BASES_QUERY < query gaps < UPPER_THRESH_BASES_QUERY
+// #define LOW_THRESH_BASES_QUERY 200    //lower threshold for a query gap 
+// #define UPPER_THRESH_BASES_QUERY 5000 //upper threshold for a query gap 
+// //  LOW_THRESH_BASES_TARGET < target gaps < UPPER_THRESH_BASES_TARGET
+// #define LOW_THRESH_BASES_TARGET -200    //lower threshold for a target gap 
+// #define UPPER_THRESH_BASES_TARGET 200 //upper threshold for a target gap 
+// // |query gap - target gap| < |target gap * GAP_DIFF_RATIO|
+// #define GAP_DIFF_RATIO INFINITY
+
 /* ------------------------------------------------------------------*/
 
 
@@ -109,8 +122,8 @@ static inline void print_qual_score(alignment_t a){
 static inline int check_if_split_mapping(alignment_t a, alignment_t b){
     //positive strand
     if(a.strand==0 && b.strand==0){
-        if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  
-            && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
+        if(a.query_start-b.query_end>LOW_THRESH_BASES_QUERY && a.query_start-b.query_end<UPPER_THRESH_BASES_QUERY  
+            && a.target_start-b.target_end>LOW_THRESH_BASES_TARGET && a.target_start-b.target_end<UPPER_THRESH_BASES_TARGET){
             return 1;
         }
         else{
@@ -119,8 +132,8 @@ static inline int check_if_split_mapping(alignment_t a, alignment_t b){
     }
     //negative strand
     else if(a.strand==1 && b.strand==1){
-        if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  
-            && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
+        if(a.query_start-b.query_end>LOW_THRESH_BASES_QUERY && a.query_start-b.query_end<UPPER_THRESH_BASES_QUERY  
+            && b.target_start-a.target_end>LOW_THRESH_BASES_TARGET && b.target_start-a.target_end<UPPER_THRESH_BASES_TARGET){
             return 1;    
         }
         else{
@@ -519,10 +532,10 @@ void filterpaf(int argc, char* argv[]){
     }
 
     fprintf(stderr,"[%s] Mapped reads %d, Total number of mappings %d\n"
-                   "        Split mappings (min gap %d, max gap %d) : %d\n"
+                   "        Split mappings (gap query:%d-%d, gap target:%d-%d) : %d\n"
                    "             - similar gap in both read and ref (similarity ratio %.1f) : %d\n",
                     __func__, stats.mapped_reads, stats.mappings_total,
-                    LOW_THRESH_BASES,UPPER_THRESH_BASES,stats.split_mappings,
+                    LOW_THRESH_BASES_QUERY,UPPER_THRESH_BASES_QUERY,LOW_THRESH_BASES_TARGET,UPPER_THRESH_BASES_TARGET,stats.split_mappings,
                     GAP_DIFF_RATIO,stats.split_mappings_same_gap);
 
 #ifdef ABSOLUTE_THRESH
