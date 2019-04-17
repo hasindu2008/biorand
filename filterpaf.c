@@ -37,24 +37,61 @@ typedef struct{
 
 }alignment_t;
 
-//#define ORDERED 1
+//stats and global vars
+typedef struct{
+	
+    //stats
+    int32_t mapped_reads;
+	int32_t mappings_total;
+	int32_t split_mappings;
+	int32_t split_mappings_same_gap;
+	int32_t martian_mappings_with_qual_drop;
+
+    //files 
+    FILE* bedfile;
+
+}stat_t;
+
+/* ---------------paf file related parameters------------------------*/
+//#define ORDERED 1 //if the mappings of a particular read are in sorted order
 #define NUM_MAPPINGS 100 //max number of mappings per read
-#define LOW_THRESH_BASES 200    //lower threshold for a gap
-#define UPPER_THRESH_BASES 5000 //upper threshold for a gap
+/* ------------------------------------------------------------------*/
 
-//#define ABSOLUTE_THRESH 1
 
+/* ---------------split mapping related parameters--------------------*/
+/*
+                target gap
+                   <--> 
+ref  : ----------------------------
+           |      |    |      |
+read :     --------    --------
+                   <-->
+                query gap 
+*/
+//  LOW_THRESH_BASES < query gaps < UPPER_THRESH_BASES
+
+#define LOW_THRESH_BASES 200    //lower threshold for a query gap 
+#define UPPER_THRESH_BASES 5000 //upper threshold for a query gap 
+
+
+// |quary gap - target gap| < |target gap * GAP_DIFF_RATIO|
+#define GAP_DIFF_RATIO 0.1
+/* ------------------------------------------------------------------*/
+
+
+/* ------------Fastq phead quality related parameters----------------*/
+//#define ABSOLUTE_THRESH 1 // for fastq quality drop, absolute drop or relative drop
 #ifdef ABSOLUTE_THRESH
-    #define QUAL_THRESH_UPPER 7 //upper throshold for the average qual
+    #define QUAL_THRESH_UPPER 7 //upper threshold for the average phred qual
     #define QUAL_THRESH_LOWER 5
 #else
-    #define QUAL_THRESH 2
+    #define QUAL_THRESH 2 //relative average phred score drop
     #define CHECK_QUAL_DROP_DEBUG 1
 #endif
-
 #define AVG_WINDOW_SIZE 500 //the window size for the average of quality scores outside the gap
+/* ------------------------------------------------------------------*/
 
-#define GAP_DIFF_RATIO 0.1
+
 
 #define QUAL_SCORE(qual, i) ((qual.c_str()[(i)])-33)
 
@@ -151,6 +188,69 @@ int32_t check_qual_drop(alignment_t a, alignment_t b){
 }
 
 
+void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
+
+    FILE *bedfile = stats->bedfile;
+
+    //target ID should be the same
+    if(a.tid==b.tid){
+
+        //positive stand
+        if(a.strand==0 && b.strand==0){
+            
+            if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
+                    cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+                    cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+                    assert(a.qual==b.qual);
+                    printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
+
+
+                    print_qual_score(a);
+                    assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
+                    //if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                    if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                        stats->split_mappings_same_gap++;
+                        if(check_qual_drop(a,b)){
+                            //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
+                            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
+                            a.rid.c_str(),a.target_start-b.target_end, '+');
+                            stats->martian_mappings_with_qual_drop++;
+                        }                
+                    }
+                    cout <<endl;
+                    stats->split_mappings++;
+            }    
+
+        }
+
+        //negative strand
+        if(a.strand==1 && b.strand==1){
+            if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
+                    cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+                    cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+                    assert(a.qual==b.qual);
+                    printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
+                    
+                    assert(a.query_start-b.query_end>=0 && b.target_start-a.target_end>=0);
+                    print_qual_score(a);
+                    //if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                    if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                        stats->split_mappings_same_gap++;
+                        if(check_qual_drop(a,b)){
+                            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
+                            b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
+                            stats->martian_mappings_with_qual_drop++;
+                        }  
+                    }
+                    
+                    cout <<endl;    
+                    stats->split_mappings++;
+            } 
+        }
+    }
+}
+
+
 void filterpaf(int argc, char* argv[]){
 	
     optind=2;
@@ -183,15 +283,14 @@ void filterpaf(int argc, char* argv[]){
     int readlinebytes=1;
     char *pch=NULL;
 
-	int32_t mapped_reads=0;
-	int32_t mappings_total=0;
-	int32_t split_mappings=0;
-	int32_t split_mappings_same_gap=0;
-	int32_t martian_mappings_with_qual_drop=0;
+
+    //stats
+    stat_t stats;
+    memset(&stats,0, sizeof(stat_t));
 
 
-    FILE* bedfile = fopen("candidates.bed","w");
-    F_CHK(bedfile,"candidates.bed");
+    stats.bedfile = fopen("candidates.bed","w");
+    F_CHK(stats.bedfile,"candidates.bed");
 
     alignment_t prev;
     prev.rid = "";
@@ -254,7 +353,7 @@ void filterpaf(int argc, char* argv[]){
         pch = strtok (NULL,"\t\r\n"); assert(pch!=NULL);
         curr.target_end= atoi(pch);
 
-        mappings_total++;
+        stats.mappings_total++;
 
         if(curr.rid==prev.rid ){
 
@@ -285,7 +384,7 @@ void filterpaf(int argc, char* argv[]){
 
         else{
     
-            mapped_reads++;
+            stats.mapped_reads++;
 
             #ifndef ORDERED    
                 for(int32_t i=0;i<mapping_of_reads_n;i++){
@@ -293,57 +392,7 @@ void filterpaf(int argc, char* argv[]){
                         if(i!=j){
                             alignment_t a = mapping_of_reads[i];
                             alignment_t b = mapping_of_reads[j];
-                            if(a.tid==b.tid){
-                                if(a.strand==0 && b.strand==0){
-                                    
-                                    if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
-                                            cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
-                                            cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
-                                            assert(a.qual==b.qual);
-                                            printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
-
-
-                                            print_qual_score(a);
-                                            assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
-                                            //if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
-                                            if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
-                                                split_mappings_same_gap++;
-                                                if(check_qual_drop(a,b)){
-                                                    //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
-                                                    fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
-                                                    a.rid.c_str(),a.target_start-b.target_end, '+');
-                                                    martian_mappings_with_qual_drop++;
-                                                }                
-                                            }
-                                            cout <<endl;
-                                            split_mappings++;
-                                    }    
-
-                                }
-                                if(a.strand==1 && b.strand==1){
-                                    if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
-                                            cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
-                                            cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
-                                            assert(a.qual==b.qual);
-                                            printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
-                                            
-                                            assert(a.query_start-b.query_end>=0 && b.target_start-a.target_end>=0);
-                                            print_qual_score(a);
-                                            //if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
-                                            if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
-                                                split_mappings_same_gap++;
-                                                if(check_qual_drop(a,b)){
-                                                    fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
-                                                    b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
-                                                    martian_mappings_with_qual_drop++;
-                                                }  
-                                            }
-                                            
-                                            cout <<endl;    
-                                            split_mappings++;
-                                    } 
-                                }
-                            }
+                            evaluate_mapping_pair(a,b,&stats);
                         }
                     }
                 }
@@ -375,21 +424,21 @@ void filterpaf(int argc, char* argv[]){
     fprintf(stderr,"[%s] Mapped reads %d, Total number of mappings %d\n"
                    "        Split mappings (min gap %d, max gap %d) : %d\n"
                    "             - similar gap in both read and ref (similarity ratio %.1f) : %d\n",
-                    __func__, mapped_reads, mappings_total,
-                    LOW_THRESH_BASES,UPPER_THRESH_BASES,split_mappings,
-                    GAP_DIFF_RATIO,split_mappings_same_gap);
+                    __func__, stats.mapped_reads, stats.mappings_total,
+                    LOW_THRESH_BASES,UPPER_THRESH_BASES,stats.split_mappings,
+                    GAP_DIFF_RATIO,stats.split_mappings_same_gap);
 
 #ifdef ABSOLUTE_THRESH
     fprintf(stderr,"                 - with qual drop (min qual %d, max qual %d, window outside gap %d) : %d\n",
             QUAL_THRESH_LOWER, QUAL_THRESH_UPPER,AVG_WINDOW_SIZE, martian_mappings_with_qual_drop);
 #else
     fprintf(stderr,"                 - with qual drop (relative drop of %d, window outside gap %d) : %d\n",
-                    QUAL_THRESH,AVG_WINDOW_SIZE, martian_mappings_with_qual_drop);
+                    QUAL_THRESH,AVG_WINDOW_SIZE, stats.martian_mappings_with_qual_drop);
 #endif
 
     kseq_destroy(seq);
     gzclose(fp);
     fclose(paffile);
-    fclose(bedfile);
+    fclose(stats.bedfile);
     free(buffer);
 }
