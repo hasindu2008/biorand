@@ -96,7 +96,7 @@ read :     --------    --------
 #define QUAL_SCORE(qual, i) ((qual.c_str()[(i)])-33)
 
 
-void print_qual_score(alignment_t a){
+static inline void print_qual_score(alignment_t a){
 
     for (int k=0;k<(int)a.qual.length();k++){
         printf("%d ",QUAL_SCORE(a.qual,k));
@@ -104,9 +104,61 @@ void print_qual_score(alignment_t a){
     cout << endl;
 }
 
+
+/* check if a split mappings */
+static inline int check_if_split_mapping(alignment_t a, alignment_t b){
+    //positive strand
+    if(a.strand==0 && b.strand==0){
+        if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  
+            && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
+            return 1;
+        }
+        else{
+            return 0;
+        }
+    }
+    //negative strand
+    else if(a.strand==1 && b.strand==1){
+        if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  
+            && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
+            return 1;    
+        }
+        else{
+            return 0;
+        }
+    }
+    else{
+        assert(0);
+    }
+}
+
+static inline int check_if_similar_gap(alignment_t a, alignment_t b){
+    //positive stand
+    if(a.strand==0 && b.strand==0){
+        if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+            return 1;
+        }
+        else{
+            return 0;
+        }    
+
+    }
+    //negative strand
+    else if(a.strand==1 && b.strand==1){
+        if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+            return 1;
+        }
+        else{
+            return 0;
+        } 
+    }
+    else{
+        assert(0);
+    }
+}
+
+/* check if there is a drop in the fastq phred quality scores */
 //#define CHECK_QUAL_DROP_DEBUG 1
-
-
 int32_t check_qual_drop(alignment_t a, alignment_t b){
 
 
@@ -187,6 +239,46 @@ int32_t check_qual_drop(alignment_t a, alignment_t b){
     }
 }
 
+void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b){
+    //positive stand
+    if(a.strand==0 && b.strand==0){
+        fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
+                            a.rid.c_str(),a.target_start-b.target_end, '+');  
+    }
+    //negative strand
+    else if(a.strand==1 && b.strand==1){
+         fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
+                            b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
+                           
+    }
+    else{
+        assert(0);
+    }    
+}
+
+void print_custom(alignment_t a, alignment_t b){
+        
+    //positive stand
+    if(a.strand==0 && b.strand==0){
+        cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+        cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+        printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
+        print_qual_score(a);
+        cout <<endl;
+    }
+
+    //negative strand
+    else if(a.strand==1 && b.strand==1){
+        cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+        cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+        printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);     
+        print_qual_score(a);
+        cout <<endl;     
+    }
+    else{
+        assert(0);
+    } 
+}
 
 void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
 
@@ -198,26 +290,29 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
         //positive stand
         if(a.strand==0 && b.strand==0){
             
-            if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
-                    cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
-                    cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+            if(check_if_split_mapping(a, b)){
+            //if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
+                    //cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+                    //cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
                     assert(a.qual==b.qual);
-                    printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
+                    //printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
+                    print_custom(a,b);
 
-
-                    print_qual_score(a);
+                    //print_qual_score(a);
                     assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
                     //if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
-                    if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                    //if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                    if(check_if_similar_gap(a,b)){    
                         stats->split_mappings_same_gap++;
                         if(check_qual_drop(a,b)){
                             //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
-                            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
-                            a.rid.c_str(),a.target_start-b.target_end, '+');
+                            //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
+                            //a.rid.c_str(),a.target_start-b.target_end, '+');
+                            print_bed_entry(bedfile,a,b);
                             stats->martian_mappings_with_qual_drop++;
                         }                
                     }
-                    cout <<endl;
+                    //cout <<endl;
                     stats->split_mappings++;
             }    
 
@@ -225,25 +320,27 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
 
         //negative strand
         if(a.strand==1 && b.strand==1){
-            if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
-                    cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
-                    cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
+            if(check_if_split_mapping(a, b)){
+            //if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
+                    //cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
+                    //cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
                     assert(a.qual==b.qual);
-                    printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
-                    
+                    //printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
+                    print_custom(a,b);
                     assert(a.query_start-b.query_end>=0 && b.target_start-a.target_end>=0);
-                    print_qual_score(a);
+                    //print_qual_score(a);
                     //if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
-                    if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                    //if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                    if(check_if_similar_gap(a,b)){     
                         stats->split_mappings_same_gap++;
                         if(check_qual_drop(a,b)){
-                            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
-                            b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
+                            //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
+                            print_bed_entry(bedfile,a,b);
                             stats->martian_mappings_with_qual_drop++;
                         }  
                     }
                     
-                    cout <<endl;    
+                    //cout <<endl;    
                     stats->split_mappings++;
             } 
         }
