@@ -24,56 +24,6 @@ KSEQ_INIT(gzFile, gzread)
 #include <iostream>
 using namespace std;
 
-typedef struct{
-    string rid;
-    int32_t query_start;
-    int32_t query_end;
-    int8_t strand;
-    string tid;
-    int32_t target_start;
-    int32_t target_end;
-
-    string qual;
-
-}alignment_t;
-
-//stats and global vars
-typedef struct{
-	
-    //stats
-    int32_t mapped_reads;
-	int32_t mappings_total;
-	int32_t split_mappings;
-	int32_t split_mappings_same_gap;
-	int32_t martian_mappings_with_qual_drop;
-
-    //files 
-    FILE* bedfile;
-
-}stat_t;
-
-typedef struct{
-    int32_t query_gap_min;
-    int32_t query_gap_max;
-    int32_t target_gap_min;
-    int32_t target_gap_max;
-
-    float gap_diff_ratio;
-
-}filterpaf_opt_t;
-
-
-static struct option long_options[] = {
-    {"profile", required_argument, 0, 'x'},          //0
-    // {"bam", required_argument, 0, 'b'},            //1
-    // {"genome", required_argument, 0, 'g'},         //2
-    {"threads", required_argument, 0, 't'},        //3
-    {"batchsize", required_argument, 0, 'K'},      //4
-    // {"print", no_argument, 0, 'p'},                //5
-    // {"aaaaaa", no_argument, 0, 0},                 //6
-    // {"help", no_argument, 0, 'h'},                 //7
-
-    {0, 0, 0, 0}};
 
 /* ---------------paf file related parameters------------------------*/
 //#define ORDERED 1 //if the mappings of a particular read are in sorted order
@@ -91,6 +41,7 @@ read :     --------------------
                    <-->
                 query gap 
 */
+
 
 // profile for generic
 //  LOW_THRESH_BASES_QUERY < query gaps < UPPER_THRESH_BASES_QUERY
@@ -131,15 +82,115 @@ read :     --------------------
     #define QUAL_THRESH_UPPER 7 //upper threshold for the average phred qual
     #define QUAL_THRESH_LOWER 5
 #else
-    #define QUAL_THRESH 2 //relative average phred score drop
+    #define QUAL_THRESH (opt->qual_thresh)//2 //relative average phred score drop
     #define CHECK_QUAL_DROP_DEBUG 1
 #endif
-#define AVG_WINDOW_SIZE 500 //the window size for the average of quality scores outside the gap
+#define AVG_WINDOW_SIZE (opt->window_size) //500 //the window size for the average of quality scores outside the gap
 /* ------------------------------------------------------------------*/
 
 
-
 #define QUAL_SCORE(qual, i) ((qual.c_str()[(i)])-33)
+
+
+typedef struct{
+    string rid;
+    int32_t query_start;
+    int32_t query_end;
+    int8_t strand;
+    string tid;
+    int32_t target_start;
+    int32_t target_end;
+
+    string qual;
+
+}alignment_t;
+
+//stats and global vars
+typedef struct{
+	
+    //stats
+    int32_t mapped_reads;
+	int32_t mappings_total;
+	int32_t split_mappings;
+	int32_t split_mappings_same_gap;
+	int32_t martian_mappings_with_qual_drop;
+
+    //files 
+    FILE* bedfile;
+
+}stat_t;
+
+
+typedef struct{
+
+    /* ---------------split mapping related parameters--------------------*/
+    int32_t query_gap_min;  //lower threshold for a query gap 
+    int32_t query_gap_max;  //upper threshold for a query gap 
+    int32_t target_gap_min; //lower threshold for a target gap 
+    int32_t target_gap_max; //upper threshold for a target gap 
+    float gap_diff_ratio;
+
+    /* ------------Fastq phead quality related parameters----------------*/
+    int32_t window_size;        //the window size for the average of quality scores outside the gap
+    float qual_thresh;       //relative average phred score drop
+
+}filterpaf_opt_t;
+
+
+
+
+
+
+
+static struct option long_options[] = {
+    {"profile", required_argument, 0, 'x'},         //0
+    {"qmin",required_argument, 0, 0},                //1   
+    {"qmax",required_argument, 0, 0},                //2  
+    {"tmin",required_argument, 0, 0},                //3
+    {"tmax",required_argument, 0, 0},               //4
+    {"gap-diff",required_argument, 0, 0},            //5
+    {"qual-thresh",required_argument, 0, 0},         //6
+    {"w-size",required_argument, 0, 0},              //7
+    // {"bam", required_argument, 0, 'b'},            //1
+    // {"genome", required_argument, 0, 'g'},         //2
+    //{"threads", required_argument, 0, 't'},        //3
+    //{"batchsize", required_argument, 0, 'K'},      //4
+    // {"print", no_argument, 0, 'p'},                //5
+    // {"aaaaaa", no_argument, 0, 0},                 //6
+    // {"help", no_argument, 0, 'h'},                 //7
+    {0, 0, 0, 0}};
+
+
+ static inline void print_usage(char **argv, filterpaf_opt_t* opt){
+    fprintf(stderr,
+    "Usage: %s %s [OPTIONS] reads.paf reads.fastq\n\n"
+    "Options :\n"
+    "   -x STR              profile (martian or insert) [martian]\n"
+    "   --qmin INT          minimum query gap\n"
+    "   --qmax INT          maximum query gap\n"
+    "   --tmin INT          minimum target gap\n"
+    "   --tmax INT          maximum target gap\n"
+    "   --gap-diff FLOAT    gap difference ratio (-1.0 to disable)\n"
+    "   --qual-thresh FLOAT relative phed quality drop in query\n"
+    "   --w-size INT        window size outside the gap for relative phred score\n\n",
+    argv[0],argv[1]);
+
+    fprintf(stderr,"Definitions :\n");
+    fprintf(stderr,  
+                   "                           %d<target_gap<%d         \n"
+                   "                                <-->                \n"
+                   "      target(ref)  : ----------------------------   \n"
+                   "                        |      |    |      |        \n"
+                   "      query(read)  :    --------------------        \n"
+                   "                                <-->                \n"
+                   "                           %d<query_gap<%d          \n\n",
+                   LOW_THRESH_BASES_TARGET,UPPER_THRESH_BASES_TARGET,
+                   LOW_THRESH_BASES_QUERY,UPPER_THRESH_BASES_QUERY);  
+
+    fprintf(stderr,"gap difference ratio : output only if |query_gap-target_gap|<|target_gap*gap-diff|, ignore if gap-diff<0.0 [current gap-diff %.1f]\n",GAP_DIFF_RATIO);
+    fprintf(stderr,"with qual drop (relative drop of  %.1f, window outside gap %d)\n",QUAL_THRESH,AVG_WINDOW_SIZE);
+ }   
+
 
 
 static inline void print_qual_score(alignment_t a){
@@ -149,7 +200,6 @@ static inline void print_qual_score(alignment_t a){
     }
     cout << endl;
 }
-
 
 /* check if a split mappings */
 static inline int check_if_split_mapping(alignment_t a, alignment_t b, filterpaf_opt_t *opt){
@@ -291,7 +341,7 @@ int32_t check_qual_drop(alignment_t a, alignment_t b,filterpaf_opt_t *opt){
     }
 }
 
-void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b){
+void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b, filterpaf_opt_t *opt){
     //positive stand
     if(a.strand==0 && b.strand==0){
         fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
@@ -308,7 +358,7 @@ void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b){
     }    
 }
 
-void print_custom(alignment_t a, alignment_t b){
+void print_custom(alignment_t a, alignment_t b, filterpaf_opt_t *opt){
         
     //positive stand
     if(a.strand==0 && b.strand==0){
@@ -348,7 +398,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                     //cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
                     assert(a.qual==b.qual);
                     //printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
-                    print_custom(a,b);
+                    print_custom(a,b,opt);
 
                     //print_qual_score(a);
                     assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
@@ -360,7 +410,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                             //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
                             //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
                             //a.rid.c_str(),a.target_start-b.target_end, '+');
-                            print_bed_entry(bedfile,a,b);
+                            print_bed_entry(bedfile,a,b,opt);
                             stats->martian_mappings_with_qual_drop++;
                         }                
                     }
@@ -378,7 +428,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                     //cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
                     assert(a.qual==b.qual);
                     //printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
-                    print_custom(a,b);
+                    print_custom(a,b,opt);
                     assert(a.query_start-b.query_end>=0 && b.target_start-a.target_end>=0);
                     //print_qual_score(a);
                     //if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
@@ -387,7 +437,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                         stats->split_mappings_same_gap++;
                         if(check_qual_drop(a,b,opt)){
                             //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
-                            print_bed_entry(bedfile,a,b);
+                            print_bed_entry(bedfile,a,b,opt);
                             stats->martian_mappings_with_qual_drop++;
                         }  
                     }
@@ -423,7 +473,37 @@ void set_profile(filterpaf_opt_t* opt,const char* profile){
 }
 
 void init_opt(filterpaf_opt_t* opt) {
+    opt->window_size = 500;
+    opt->qual_thresh = 2;
     set_profile(opt,"martian");
+}
+
+void print_final_stats(filterpaf_opt_t* opt, stat_t stats){
+
+    fprintf(stderr,"[%s] definitions\n",__func__);
+    fprintf(stderr,  
+                   "                             target_gap             \n"
+                   "                                <-->                \n"
+                   "      target(ref)  : ----------------------------   \n"
+                   "                        |      |    |      |        \n"
+                   "      query(read)  :    --------------------        \n"
+                   "                                <-->                \n"
+                   "                              query_gap             \n");  
+
+    fprintf(stderr," ");
+
+    fprintf(stderr,"[%s] Mapped reads : %d, Total number of mappings : %d\n",__func__, stats.mapped_reads, stats.mappings_total);
+    fprintf(stderr,"        Split mappings (query_gap [%d,%d], target_gap [%d-%d]) : %d\n",LOW_THRESH_BASES_QUERY,UPPER_THRESH_BASES_QUERY,LOW_THRESH_BASES_TARGET,UPPER_THRESH_BASES_TARGET,stats.split_mappings);
+if(GAP_DIFF_RATIO>=0){    
+    fprintf(stderr,"             - similar gap in both query and target ( |query_gap-target_gap| < |target_gap*%.1f| ) : %d\n",GAP_DIFF_RATIO,stats.split_mappings_same_gap);
+}
+#ifdef ABSOLUTE_THRESH
+    fprintf(stderr,"                 - with qual drop (min qual %d, max qual %d, window outside gap %d) : %d\n",
+            QUAL_THRESH_LOWER, QUAL_THRESH_UPPER,AVG_WINDOW_SIZE, martian_mappings_with_qual_drop);
+#else
+    fprintf(stderr,"                 - with qual drop (relative drop of %.1f, window outside gap %d) : %d\n",
+                    QUAL_THRESH,AVG_WINDOW_SIZE, stats.martian_mappings_with_qual_drop);
+#endif
 }
 
 void filterpaf(int argc, char* argv[]){
@@ -443,6 +523,27 @@ void filterpaf(int argc, char* argv[]){
         if (c == 'x') {
             set_profile(opt,optarg);
         }
+        else if (c == 0 && longindex == 1){
+            opt->query_gap_min = atoi(optarg);
+        }
+        else if (c == 0 && longindex == 2){
+            opt->query_gap_max = atoi(optarg);
+        }
+        else if (c == 0 && longindex == 3){
+            opt->target_gap_min = atoi(optarg);
+        }            
+        else if (c == 0 && longindex == 4){
+            opt->target_gap_min = atoi(optarg);
+        }
+        else if (c == 0 && longindex == 5){
+            opt->gap_diff_ratio = atof(optarg);
+        }
+        else if (c == 0 && longindex == 6){
+            opt->qual_thresh = atof(optarg);
+        }
+        else if (c == 0 && longindex == 7){
+            opt->window_size = atoi(optarg);
+        }                        
         // } else if (c == 'b') {
         //     bamfilename = optarg;
         // } else if (c == 'g') {
@@ -460,10 +561,7 @@ void filterpaf(int argc, char* argv[]){
     }
 
     if (argc-optind < 2) {
-        fprintf(
-            stderr,
-            "Usage: %s %s [OPTIONS] reads.paf reads.fastq\n",
-            argv[0],argv[1]);
+        print_usage(argv,opt);
         exit(EXIT_FAILURE);
     }
 
@@ -625,20 +723,7 @@ void filterpaf(int argc, char* argv[]){
 
     }
 
-    fprintf(stderr,"[%s] Mapped reads %d, Total number of mappings %d\n"
-                   "        Split mappings (gap query:%d-%d, gap target:%d-%d) : %d\n"
-                   "             - similar gap in both read and ref (similarity ratio %.1f) : %d\n",
-                    __func__, stats.mapped_reads, stats.mappings_total,
-                    LOW_THRESH_BASES_QUERY,UPPER_THRESH_BASES_QUERY,LOW_THRESH_BASES_TARGET,UPPER_THRESH_BASES_TARGET,stats.split_mappings,
-                    GAP_DIFF_RATIO,stats.split_mappings_same_gap);
 
-#ifdef ABSOLUTE_THRESH
-    fprintf(stderr,"                 - with qual drop (min qual %d, max qual %d, window outside gap %d) : %d\n",
-            QUAL_THRESH_LOWER, QUAL_THRESH_UPPER,AVG_WINDOW_SIZE, martian_mappings_with_qual_drop);
-#else
-    fprintf(stderr,"                 - with qual drop (relative drop of %d, window outside gap %d) : %d\n",
-                    QUAL_THRESH,AVG_WINDOW_SIZE, stats.martian_mappings_with_qual_drop);
-#endif
 
     kseq_destroy(seq);
     gzclose(fp);
