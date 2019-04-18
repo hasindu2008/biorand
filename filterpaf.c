@@ -405,7 +405,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                     print_custom(a,b,opt);
 
                     //print_qual_score(a);
-                    if(LOW_THRESH_BASES_QUERY>=0) assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
+                    if(LOW_THRESH_BASES_TARGET>=0) assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
                     //if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
                     //if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
                     if(check_if_similar_gap(a,b,opt)){    
@@ -433,7 +433,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                     assert(a.qual==b.qual);
                     //printf("readgap %d\tchrgap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
                     print_custom(a,b,opt);
-                    if(LOW_THRESH_BASES_QUERY>=0) assert(a.query_start-b.query_end>=0 && b.target_start-a.target_end>=0);
+                    if(LOW_THRESH_BASES_TARGET>=0) assert(a.query_start-b.query_end>=0 && b.target_start-a.target_end>=0);
                     //print_qual_score(a);
                     //if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
                     //if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
