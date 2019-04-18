@@ -151,6 +151,7 @@ static struct option long_options[] = {
     {"gap-diff",required_argument, 0, 0},            //5
     {"qual-thresh",required_argument, 0, 0},         //6
     {"w-size",required_argument, 0, 0},              //7
+    {"bed",required_argument, 0, 0},             //8
     // {"bam", required_argument, 0, 'b'},            //1
     // {"genome", required_argument, 0, 'g'},         //2
     //{"threads", required_argument, 0, 't'},        //3
@@ -172,7 +173,8 @@ static struct option long_options[] = {
     "   --tmax INT          maximum target gap\n"
     "   --gap-diff FLOAT    gap difference ratio (-1.0 to disable)\n"
     "   --qual-thresh FLOAT relative phed quality drop in query\n"
-    "   --w-size INT        window size outside the gap for relative phred score\n\n",
+    "   --w-size INT        window size outside the gap for relative phred score\n"
+    "   --bed STR           bed file for output\n\n",
     argv[0],argv[1]);
 
     fprintf(stderr,"Definitions :\n");
@@ -523,6 +525,8 @@ void filterpaf(int argc, char* argv[]){
     filterpaf_opt_t* opt = &opt_s;;
     init_opt(opt);    
 	
+    char *bedfilename=NULL;
+
     while ((c = getopt_long(argc, argv, optstring, long_options, &longindex)) >=0) {
         if (c == 'x') {
             set_profile(opt,optarg);
@@ -547,7 +551,11 @@ void filterpaf(int argc, char* argv[]){
         }
         else if (c == 0 && longindex == 7){
             opt->window_size = atoi(optarg);
-        }                        
+        } 
+        else if (c == 0 && longindex == 8){
+            bedfilename = optarg;
+            assert(bedfilename!=NULL);
+        }                      
         // } else if (c == 'b') {
         //     bamfilename = optarg;
         // } else if (c == 'g') {
@@ -595,8 +603,8 @@ void filterpaf(int argc, char* argv[]){
     memset(&stats,0, sizeof(stat_t));
 
 
-    stats.bedfile = fopen("candidates.bed","w");
-    F_CHK(stats.bedfile,"candidates.bed");
+    stats.bedfile = fopen(bedfilename,"w");
+    F_CHK(stats.bedfile,bedfilename);
 
     alignment_t prev;
     prev.rid = "";
