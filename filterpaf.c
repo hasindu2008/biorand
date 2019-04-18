@@ -52,6 +52,29 @@ typedef struct{
 
 }stat_t;
 
+typedef struct{
+    int32_t query_gap_min;
+    int32_t query_gap_max;
+    int32_t target_gap_min;
+    int32_t target_gap_max;
+
+    float gap_diff_ratio;
+
+}filterpaf_opt_t;
+
+
+static struct option long_options[] = {
+    {"profile", required_argument, 0, 'x'},          //0
+    // {"bam", required_argument, 0, 'b'},            //1
+    // {"genome", required_argument, 0, 'g'},         //2
+    {"threads", required_argument, 0, 't'},        //3
+    {"batchsize", required_argument, 0, 'K'},      //4
+    // {"print", no_argument, 0, 'p'},                //5
+    // {"aaaaaa", no_argument, 0, 0},                 //6
+    // {"help", no_argument, 0, 'h'},                 //7
+
+    {0, 0, 0, 0}};
+
 /* ---------------paf file related parameters------------------------*/
 //#define ORDERED 1 //if the mappings of a particular read are in sorted order
 #define NUM_MAPPINGS 100 //max number of mappings per read
@@ -69,15 +92,25 @@ read :     --------------------
                 query gap 
 */
 
-// profile for martin filters
+// profile for generic
 //  LOW_THRESH_BASES_QUERY < query gaps < UPPER_THRESH_BASES_QUERY
-#define LOW_THRESH_BASES_QUERY 200    //lower threshold for a query gap 
-#define UPPER_THRESH_BASES_QUERY 5000 //upper threshold for a query gap 
+#define LOW_THRESH_BASES_QUERY (opt->query_gap_min)    //lower threshold for a query gap 
+#define UPPER_THRESH_BASES_QUERY (opt->query_gap_max)  //upper threshold for a query gap 
 //  LOW_THRESH_BASES_TARGET < target gaps < UPPER_THRESH_BASES_TARGET
-#define LOW_THRESH_BASES_TARGET 200    //lower threshold for a target gap 
-#define UPPER_THRESH_BASES_TARGET 5000 //upper threshold for a target gap 
+#define LOW_THRESH_BASES_TARGET (opt->target_gap_min)     //lower threshold for a target gap 
+#define UPPER_THRESH_BASES_TARGET (opt->target_gap_max)  //upper threshold for a target gap 
 // |query gap - target gap| < |target gap * GAP_DIFF_RATIO|
-#define GAP_DIFF_RATIO 0.1
+#define GAP_DIFF_RATIO (opt->gap_diff_ratio) 
+
+// // profile for martin filters
+// //  LOW_THRESH_BASES_QUERY < query gaps < UPPER_THRESH_BASES_QUERY
+// #define LOW_THRESH_BASES_QUERY 200    //lower threshold for a query gap 
+// #define UPPER_THRESH_BASES_QUERY 5000 //upper threshold for a query gap 
+// //  LOW_THRESH_BASES_TARGET < target gaps < UPPER_THRESH_BASES_TARGET
+// #define LOW_THRESH_BASES_TARGET 200    //lower threshold for a target gap 
+// #define UPPER_THRESH_BASES_TARGET 5000 //upper threshold for a target gap 
+// // |query gap - target gap| < |target gap * GAP_DIFF_RATIO|
+// #define GAP_DIFF_RATIO 0.1
 
 // // profile for insersions
 // //  LOW_THRESH_BASES_QUERY < query gaps < UPPER_THRESH_BASES_QUERY
@@ -87,7 +120,7 @@ read :     --------------------
 // #define LOW_THRESH_BASES_TARGET -200    //lower threshold for a target gap 
 // #define UPPER_THRESH_BASES_TARGET 200 //upper threshold for a target gap 
 // // |query gap - target gap| < |target gap * GAP_DIFF_RATIO|
-// #define GAP_DIFF_RATIO INFINITY
+// #define GAP_DIFF_RATIO -1.0
 
 /* ------------------------------------------------------------------*/
 
@@ -119,7 +152,7 @@ static inline void print_qual_score(alignment_t a){
 
 
 /* check if a split mappings */
-static inline int check_if_split_mapping(alignment_t a, alignment_t b){
+static inline int check_if_split_mapping(alignment_t a, alignment_t b, filterpaf_opt_t *opt){
     //positive strand
     if(a.strand==0 && b.strand==0){
         if(a.query_start-b.query_end>LOW_THRESH_BASES_QUERY && a.query_start-b.query_end<UPPER_THRESH_BASES_QUERY  
@@ -145,34 +178,40 @@ static inline int check_if_split_mapping(alignment_t a, alignment_t b){
     }
 }
 
-static inline int check_if_similar_gap(alignment_t a, alignment_t b){
-    //positive stand
-    if(a.strand==0 && b.strand==0){
-        if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
-            return 1;
-        }
-        else{
-            return 0;
-        }    
+static inline int check_if_similar_gap(alignment_t a, alignment_t b, filterpaf_opt_t* opt){
 
-    }
-    //negative strand
-    else if(a.strand==1 && b.strand==1){
-        if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
-            return 1;
-        }
-        else{
-            return 0;
-        } 
+    if(GAP_DIFF_RATIO<0){ //filter is disabled 
+        return 1;
     }
     else{
-        assert(0);
+        //positive stand
+        if(a.strand==0 && b.strand==0){
+            if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
+                return 1;
+            }
+            else{
+                return 0;
+            }    
+
+        }
+        //negative strand
+        else if(a.strand==1 && b.strand==1){
+            if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
+                return 1;
+            }
+            else{
+                return 0;
+            } 
+        }
+        else{
+            assert(0);
+        }
     }
 }
 
 /* check if there is a drop in the fastq phred quality scores */
 //#define CHECK_QUAL_DROP_DEBUG 1
-int32_t check_qual_drop(alignment_t a, alignment_t b){
+int32_t check_qual_drop(alignment_t a, alignment_t b,filterpaf_opt_t *opt){
 
 
     float sum,avg_prev,avg_split,avg_post;
@@ -293,7 +332,7 @@ void print_custom(alignment_t a, alignment_t b){
     } 
 }
 
-void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
+void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpaf_opt_t *opt){
 
     FILE *bedfile = stats->bedfile;
 
@@ -303,7 +342,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
         //positive stand
         if(a.strand==0 && b.strand==0){
             
-            if(check_if_split_mapping(a, b)){
+            if(check_if_split_mapping(a, b,opt)){
             //if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && a.target_start-b.target_end>LOW_THRESH_BASES && a.target_start-b.target_end<UPPER_THRESH_BASES){
                     //cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
                     //cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
@@ -315,9 +354,9 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
                     assert(a.query_start-b.query_end>=0 && a.target_start-b.target_end>=0);
                     //if( abs(abs(a.query_start-b.query_end) - abs(a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
                     //if( abs((a.query_start-b.query_end) - (a.target_start-b.target_end)) < abs(a.target_start-b.target_end)*GAP_DIFF_RATIO ){
-                    if(check_if_similar_gap(a,b)){    
+                    if(check_if_similar_gap(a,b,opt)){    
                         stats->split_mappings_same_gap++;
-                        if(check_qual_drop(a,b)){
+                        if(check_qual_drop(a,b,opt)){
                             //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
                             //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
                             //a.rid.c_str(),a.target_start-b.target_end, '+');
@@ -333,7 +372,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
 
         //negative strand
         if(a.strand==1 && b.strand==1){
-            if(check_if_split_mapping(a, b)){
+            if(check_if_split_mapping(a, b,opt)){
             //if(a.query_start-b.query_end>LOW_THRESH_BASES && a.query_start-b.query_end<UPPER_THRESH_BASES  && b.target_start-a.target_end>LOW_THRESH_BASES && b.target_start-a.target_end<UPPER_THRESH_BASES){
                     //cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
                     //cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
@@ -344,9 +383,9 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
                     //print_qual_score(a);
                     //if( abs(abs(a.query_start-b.query_end) - abs(b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
                     //if( abs((a.query_start-b.query_end) - (b.target_start-a.target_end)) < abs(b.target_start-a.target_end)*GAP_DIFF_RATIO ){
-                    if(check_if_similar_gap(a,b)){     
+                    if(check_if_similar_gap(a,b,opt)){     
                         stats->split_mappings_same_gap++;
-                        if(check_qual_drop(a,b)){
+                        if(check_qual_drop(a,b,opt)){
                             //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
                             print_bed_entry(bedfile,a,b);
                             stats->martian_mappings_with_qual_drop++;
@@ -361,9 +400,64 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats){
 }
 
 
+void set_profile(filterpaf_opt_t* opt,const char* profile){
+
+    if(strcmp(profile,"martian")==0){
+        opt->query_gap_min=200;
+        opt->query_gap_max=5000;
+        opt->target_gap_min=200;
+        opt->target_gap_max=5000;
+        opt->gap_diff_ratio=0.1;
+    }
+    else if(strcmp(profile,"insert")==0){
+        opt->query_gap_min=200;
+        opt->query_gap_max=5000;
+        opt->target_gap_min=200;
+        opt->target_gap_max=-200;
+        opt->gap_diff_ratio=-1.0;
+    }
+    else{
+        ERROR("Unkown profile %s",profile);
+        exit(EXIT_FAILURE);
+    }
+}
+
+void init_opt(filterpaf_opt_t* opt) {
+    set_profile(opt,"martian");
+}
+
 void filterpaf(int argc, char* argv[]){
 	
+
+    const char* optstring = "x:";
+    int longindex = 0;
+    int32_t c = -1;
+
     optind=2;
+
+    filterpaf_opt_t opt_s;
+    filterpaf_opt_t* opt = &opt_s;;
+    init_opt(opt);    
+	
+    while ((c = getopt_long(argc, argv, optstring, long_options, &longindex)) >=0) {
+        if (c == 'x') {
+            set_profile(opt,optarg);
+        }
+        // } else if (c == 'b') {
+        //     bamfilename = optarg;
+        // } else if (c == 'g') {
+        //     fastafile = optarg;
+        // // } else if (c == 'p') {
+        //     // opt.flag |= F5C_PRINT_RAW;
+        // } else if (c == 'K') {
+        //     opt.batch_size = atoi(optarg);
+        //     if (opt.batch_size < 1) {
+        //         ERROR("Batch size should larger than 0. You entered %d",
+        //               opt.batch_size);
+        //         exit(EXIT_FAILURE);
+        //     }
+
+    }
 
     if (argc-optind < 2) {
         fprintf(
@@ -502,7 +596,7 @@ void filterpaf(int argc, char* argv[]){
                         if(i!=j){
                             alignment_t a = mapping_of_reads[i];
                             alignment_t b = mapping_of_reads[j];
-                            evaluate_mapping_pair(a,b,&stats);
+                            evaluate_mapping_pair(a,b,&stats,opt);
                         }
                     }
                 }
