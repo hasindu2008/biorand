@@ -85,7 +85,7 @@ read :     --------------------
 #else
     #define QUAL_THRESH (opt->qual_thresh)//2 //relative average phred score drop
 #endif
-#define CHECK_QUAL_DROP_DEBUG_PRINT 1
+//#define CHECK_QUAL_DROP_DEBUG_PRINT 1
 #define AVG_WINDOW_SIZE (opt->window_size) //500 //the window size for the average of quality scores outside the gap
 /* ------------------------------------------------------------------*/
 
