@@ -115,9 +115,18 @@ typedef struct{
 	int32_t split_mappings;
 	int32_t split_mappings_same_gap;
 	int32_t martian_mappings_with_qual_drop;
+	int32_t trans;
 
     //files 
     FILE* bedfile;
+
+    //
+    alignment_t *mapping_of_reads;
+    int32_t mapping_of_reads_n;
+    int32_t i;
+    int32_t j;
+    int32_t k;
+
 
 }stat_t;
 
@@ -138,6 +147,8 @@ typedef struct{
     //flags
     int8_t print_qual;
 
+    int32_t transposon_thresh;
+
 }filterpaf_opt_t;
 
 
@@ -157,6 +168,7 @@ static struct option long_options[] = {
     {"w-size",required_argument, 0, 0},              //7
     {"bed",required_argument, 0, 0},                //8
     {"print-qual-score",no_argument,0,'p'},         //9  
+    {"trans",required_argument,0,0},         //10  
     // {"bam", required_argument, 0, 'b'},            //1
     // {"genome", required_argument, 0, 'g'},         //2
     //{"threads", required_argument, 0, 't'},        //3
@@ -179,7 +191,8 @@ static struct option long_options[] = {
     "   --gap-diff FLOAT    gap difference ratio (-1.0 to disable)\n"
     "   --qual-thresh FLOAT relative phed quality drop in query\n"
     "   --w-size INT        window size outside the gap for relative phred score\n"
-    "   --bed STR           bed file for output\n\n",
+    "   --bed STR           bed file for output\n"
+    "   --trans INT         threshold for transposons\n\n",
     argv[0],argv[1]);
 
     fprintf(stderr,"Definitions :\n");
@@ -268,6 +281,29 @@ static inline int check_if_similar_gap(alignment_t a, alignment_t b, filterpaf_o
         else{
             assert(0);
         }
+    }
+}
+
+
+int32_t check_transposone(alignment_t a, alignment_t b, filterpaf_opt_t *opt, stat_t *stats){
+
+    if(opt->transposon_thresh < 0){
+        return 1;
+    }
+    else{
+
+        int k=0;
+        for(k=0;k<stats->mapping_of_reads_n;k++){
+            if(k!=stats->i && k!=stats->j){
+                alignment_t c = stats->mapping_of_reads[k];
+                if(abs(b.query_end-c.query_start) < opt->transposon_thresh && abs(a.query_start-c.query_end) < opt->transposon_thresh){
+                    stats->k=k;
+                    return 1;
+                }
+            }
+        }  
+        
+        return 0;
     }
 }
 
@@ -379,13 +415,17 @@ void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b, filterpaf_opt_
     }    
 }
 
-void print_custom(alignment_t a, alignment_t b, filterpaf_opt_t *opt){
+void print_custom(alignment_t a, alignment_t b, filterpaf_opt_t *opt, stat_t *stats){
         
     //positive stand
     if(a.strand==0 && b.strand==0){
         cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t+\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
         cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t+\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
         printf("query_gap %d\ttarget_gap %d\n",a.query_start-b.query_end,a.target_start-b.target_end);
+        if(opt->transposon_thresh>=0){
+            alignment_t c = stats->mapping_of_reads[stats->k];
+            cout << c.rid  << "\t" << c.query_start << "\t" << c.query_end << "\t+\t" << c.tid << "\t" << c.target_start << "\t" << c.target_end << endl;
+        }
         print_qual_score(a,opt);
         cout <<endl;
     }
@@ -394,7 +434,11 @@ void print_custom(alignment_t a, alignment_t b, filterpaf_opt_t *opt){
     else if(a.strand==1 && b.strand==1){
         cout << b.rid  << "\t" << b.query_start << "\t" << b.query_end << "\t-\t" << b.tid << "\t" << b.target_start << "\t" << b.target_end << endl;
         cout << a.rid  << "\t" << a.query_start << "\t" << a.query_end << "\t-\t" << a.tid << "\t" << a.target_start << "\t" << a.target_end << endl;
-        printf("query_gap %d\ttarget_gap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);     
+        printf("query_gap %d\ttarget_gap %d\n",a.query_start-b.query_end,b.target_start-a.target_end);
+        if(opt->transposon_thresh>=0){
+            alignment_t c = stats->mapping_of_reads[stats->k];
+            cout << c.rid  << "\t" << c.query_start << "\t" << c.query_end << "\t-\t" << c.tid << "\t" << c.target_start << "\t" << c.target_end << endl;
+        }   
         print_qual_score(a,opt);
         cout <<endl;     
     }
@@ -431,9 +475,12 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                             //fprintf(stderr,"%s:%d-%d\t%s:%d-%d\n",a.rid.c_str(),b.query_end,a.query_start,a.tid.c_str(),b.target_end,a.target_start);
                             //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
                             //a.rid.c_str(),a.target_start-b.target_end, '+');
-                            print_custom(a,b,opt);
-                            print_bed_entry(bedfile,a,b,opt);
                             stats->martian_mappings_with_qual_drop++;
+                            if(check_transposone(a,b,opt,stats)){
+                                print_custom(a,b,opt,stats);
+                                print_bed_entry(bedfile,a,b,opt);
+                                stats->trans++;
+                            }
                         }                
                     }
                     //cout <<endl;
@@ -459,9 +506,12 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                         stats->split_mappings_same_gap++;
                         if(check_qual_drop(a,b,opt)){
                             //fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
-                            print_custom(a,b,opt);
-                            print_bed_entry(bedfile,a,b,opt);
                             stats->martian_mappings_with_qual_drop++;
+                            if(check_transposone(a,b,opt,stats)){
+                                print_custom(a,b,opt,stats);
+                                print_bed_entry(bedfile,a,b,opt);
+                                stats->trans++;
+                            }
                         }  
                     }
                     
@@ -506,6 +556,7 @@ void init_opt(filterpaf_opt_t* opt) {
     opt->window_size = 500;
     opt->qual_thresh = 2;
     opt->print_qual = 0 ;
+    opt->transposon_thresh = -1 ;
     set_profile(opt,"martian");
 }
 
@@ -534,6 +585,8 @@ if(GAP_DIFF_RATIO>=0){
 #else
     fprintf(stderr,"                 - with qual drop (relative drop of %.1f, window outside gap %d) : %d\n",
                     QUAL_THRESH,AVG_WINDOW_SIZE, stats.martian_mappings_with_qual_drop);
+    fprintf(stderr,"                 - transposons (threshold %d) : %d\n",
+                    opt->transposon_thresh,stats.trans);                    
 #endif
 }
 
@@ -585,6 +638,9 @@ void filterpaf(int argc, char* argv[]){
         else if(c=='p'){
             opt->print_qual=1;
         }
+        else if (c == 0 && longindex == 10){
+            opt->transposon_thresh = atoi(optarg);
+        }        
         // } else if (c == 'b') {
         //     bamfilename = optarg;
         // } else if (c == 'g') {
@@ -643,6 +699,7 @@ void filterpaf(int argc, char* argv[]){
 
 #ifndef ORDERED
     alignment_t mapping_of_reads[NUM_MAPPINGS];
+    stats.mapping_of_reads = mapping_of_reads;
     int32_t mapping_of_reads_n=0;
 #endif
 
@@ -729,12 +786,15 @@ void filterpaf(int argc, char* argv[]){
     
             stats.mapped_reads++;
 
-            #ifndef ORDERED    
+            #ifndef ORDERED
+                stats.mapping_of_reads_n=mapping_of_reads_n;
                 for(int32_t i=0;i<mapping_of_reads_n;i++){
                     for(int32_t j=0;j<mapping_of_reads_n;j++){
                         if(i!=j){
                             alignment_t a = mapping_of_reads[i];
                             alignment_t b = mapping_of_reads[j];
+                            stats.i=i;
+                            stats.j=j;
                             evaluate_mapping_pair(a,b,&stats,opt);
                         }
                     }
