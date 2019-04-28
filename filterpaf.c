@@ -183,16 +183,16 @@ static struct option long_options[] = {
     fprintf(stderr,
     "Usage: %s %s [OPTIONS] reads.paf reads.fastq\n\n"
     "Options :\n"
-    "   -x STR              profile (martian or insert or del) [martian]\n"
+    "   -x STR              profile (martian/insert/del/trans) [martian]\n"
     "   --qmin INT          minimum query gap\n"
     "   --qmax INT          maximum query gap\n"
     "   --tmin INT          minimum target gap\n"
     "   --tmax INT          maximum target gap\n"
     "   --gap-diff FLOAT    gap difference ratio (-1.0 to disable)\n"
-    "   --qual-thresh FLOAT relative phed quality drop in query\n"
+    "   --qual-thresh FLOAT relative phed quality drop in query (0.0 to disable)\n"
     "   --w-size INT        window size outside the gap for relative phred score\n"
     "   --bed STR           bed file for output\n"
-    "   --trans INT         threshold for transposons\n\n",
+    "   --trans INT         threshold for transposons (-1.0 to disable)\n\n",
     argv[0],argv[1]);
 
     fprintf(stderr,"Definitions :\n");
@@ -398,17 +398,30 @@ int32_t check_qual_drop(alignment_t a, alignment_t b,filterpaf_opt_t *opt){
     }
 }
 
-void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b, filterpaf_opt_t *opt){
+void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b, filterpaf_opt_t *opt,stat_t *stats){
     //positive stand
     if(a.strand==0 && b.strand==0){
-        fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
+        if(opt->transposon_thresh<0){
+            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
                             a.rid.c_str(),a.target_start-b.target_end, '+');  
+        }
+        else{
+            alignment_t c = stats->mapping_of_reads[stats->k];
+            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",c.tid.c_str(),c.target_start,c.target_end ,
+                            c.rid.c_str(),c.query_start-c.query_end, '+');          
+        }                            
     }
     //negative strand
     else if(a.strand==1 && b.strand==1){
-         fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
+        if(opt->transposon_thresh<0){
+            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
                             b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
-                           
+        }
+        else{
+            alignment_t c = stats->mapping_of_reads[stats->k];
+            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",c.tid.c_str(),c.target_start,c.target_end ,
+                            c.rid.c_str(),c.query_start-c.query_end, '+');       
+        }            
     }
     else{
         assert(0);
@@ -478,7 +491,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                             stats->martian_mappings_with_qual_drop++;
                             if(check_transposone(a,b,opt,stats)){
                                 print_custom(a,b,opt,stats);
-                                print_bed_entry(bedfile,a,b,opt);
+                                print_bed_entry(bedfile,a,b,opt,stats);
                                 stats->trans++;
                             }
                         }                
@@ -509,7 +522,7 @@ void evaluate_mapping_pair(alignment_t a, alignment_t b, stat_t *stats, filterpa
                             stats->martian_mappings_with_qual_drop++;
                             if(check_transposone(a,b,opt,stats)){
                                 print_custom(a,b,opt,stats);
-                                print_bed_entry(bedfile,a,b,opt);
+                                print_bed_entry(bedfile,a,b,opt,stats);
                                 stats->trans++;
                             }
                         }  
@@ -545,6 +558,14 @@ void set_profile(filterpaf_opt_t* opt,const char* profile){
         opt->target_gap_min=200;
         opt->target_gap_max=5000;
         opt->gap_diff_ratio=-0.1;
+    }
+    else if(strcmp(profile,"trans")==0){
+        opt->query_gap_min=200;
+        opt->query_gap_max=5000;
+        opt->target_gap_min=-200;
+        opt->target_gap_max=200;
+        opt->gap_diff_ratio=-1.0;
+        opt->transposon_thresh = 500;
     }
     else{
         ERROR("Unkown profile %s",profile);
