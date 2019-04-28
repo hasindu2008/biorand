@@ -420,7 +420,7 @@ void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b, filterpaf_opt_
         else{
             alignment_t c = stats->mapping_of_reads[stats->k];
             fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",c.tid.c_str(),c.target_start,c.target_end ,
-                            c.rid.c_str(),c.query_start-c.query_end, '+');       
+                            c.rid.c_str(),c.query_start-c.query_end, '-');       
         }            
     }
     else{
@@ -551,6 +551,7 @@ void set_profile(filterpaf_opt_t* opt,const char* profile){
         opt->target_gap_min=-200;
         opt->target_gap_max=200;
         opt->gap_diff_ratio=-1.0;
+        opt->qual_thresh = 0.0;
     }
     else if(strcmp(profile,"del")==0){
         opt->query_gap_min=-200;
@@ -558,6 +559,7 @@ void set_profile(filterpaf_opt_t* opt,const char* profile){
         opt->target_gap_min=200;
         opt->target_gap_max=5000;
         opt->gap_diff_ratio=-0.1;
+        opt->qual_thresh = 0.0;
     }
     else if(strcmp(profile,"trans")==0){
         opt->query_gap_min=200;
