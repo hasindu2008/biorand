@@ -402,7 +402,7 @@ void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b, filterpaf_opt_
     //positive stand
     if(a.strand==0 && b.strand==0){
         if(opt->transposon_thresh<0){
-            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end-AVG_WINDOW_SIZE,a.target_start+1+AVG_WINDOW_SIZE,
+            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),b.target_end,a.target_start+1,
                             a.rid.c_str(),a.target_start-b.target_end, '+');  
         }
         else{
@@ -414,8 +414,8 @@ void print_bed_entry(FILE *bedfile, alignment_t a, alignment_t b, filterpaf_opt_
     //negative strand
     else if(a.strand==1 && b.strand==1){
         if(opt->transposon_thresh<0){
-            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end-AVG_WINDOW_SIZE,
-                            b.target_start+1+AVG_WINDOW_SIZE,a.rid.c_str(),b.target_start-a.target_end,'-');
+            fprintf(bedfile,"%s\t%d\t%d\t%s\t%d\t%c\n",a.tid.c_str(),a.target_end,
+                            b.target_start+1,a.rid.c_str(),b.target_start-a.target_end,'-');
         }
         else{
             alignment_t c = stats->mapping_of_reads[stats->k];
