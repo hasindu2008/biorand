@@ -11,7 +11,7 @@ CPPFLAGS =
 LDFLAGS += $(LIBS) -lpthread  -lz
 
 #SRC = $(wildcard *.c)
-SRC = main.c biorand.c filterpaf.c filterfq.c comparesam.c
+SRC = main.c biorand.c filterpaf.c filterfq.c comparesam.c olp.c
 OBJ = $(SRC:.c=.o)
 BINARY = biorand
 DEPS = misc.h biorand.h kseq.h 
