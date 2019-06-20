@@ -107,3 +107,18 @@ CONSIDER_SUPPLEMENTARY and CONSIDER_SECONDARY compile time flags.
 - The comparison statistics are updated during the comparison and
 the entries will be written to the tsv and bed file if required.
 - Finally we print the comparison statistics.
+
+### olp
+
+Given an input fastq file, outputs pair-wise exact overlaps for all-vs-all reads
+
+```sh
+Usage: biorand olp <in.fq> <out.paf> <read size> <num reads> <min overlap> <max overlap>
+```
+
+- <in.fq> : input fastq
+- <out.paf> : output [Pairwise mApping Format (PAF)](https://github.com/lh3/miniasm/blob/master/PAF.md) file
+- <read size> : the read length
+- <num reads> : the number of reads
+- <min overlap> : the minimum number of bases to be considered an overlap
+- <max overlap> : the maximum number of bases to be considered an overlap
