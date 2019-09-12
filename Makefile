@@ -1,4 +1,5 @@
-CC       = g++
+CC		 = gcc
+CXX       = g++
 CFLAGS   = -g -rdynamic -Wall -O2 -std=c++11 
 CPPFLAGS =
 
@@ -18,16 +19,22 @@ DEPS = misc.h biorand.h kseq.h
 
 .PHONY: clean distclean format test
 
+all : $(BINARY) bin/clean_fscache
+
 $(BINARY) : $(OBJ) 
-	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
+	$(CXX) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 
 %.o : %.c $(DEPS)
-	$(CC) $(CFLAGS) $(CPPFLAGS) $< -c 
+	$(CXX) $(CFLAGS) $(CPPFLAGS) $< -c 
 	
 
+bin/clean_fscache : clean_fscache.c
+	$(CC) -Wall $< $(LDFLAGS) -o $@
+	
+	
 clean: 
-	rm -rf temp *.o *.out
+	rm -rf temp *.o *.out $(BINARY) bin/clean_fscache
 
 # Delete all gitignored files (but not directories)
 distclean: clean

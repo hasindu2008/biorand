@@ -1,0 +1,21 @@
+if [ "$#" -ne 2 ]; then
+    echo "usage : $0 aln.sam reads.txt > output.bam"
+        exit
+fi
+
+
+die() {
+    local msg="${1}"
+    echo "Error: ${msg}" >&2
+    exit 1
+}
+
+samfile=$1
+test -e $samfile || die "$samfile does not exist"
+readlist=$2
+test -e $readlist || die "$readlist does not exist"
+
+{ 
+samtools view -H $samfile
+grep -F -f $readlist $samfile 
+} | samtools view -h -F2308  | samtools sort - 
