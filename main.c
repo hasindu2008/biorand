@@ -52,10 +52,17 @@ int main(int argc, char* argv[]) {
     }
     else if(strcmp(argv[1],"comparesam")==0){
         comparesam(argc, argv);
-    }	
+    }
+    else if(strcmp(argv[1],"olp")==0){
+        olp(argc-1, &argv[1]);
+    }
     else{
         fprintf(stderr,"Unknown program %s\nUsage: %s [PROGRAM] [OPTIONS]\n",argv[1],argv[0]);
-        fprintf(stderr,"PROGRAM : \n\tfilterfq - apply martian filter for a fastq file\n\tfilterpaf - apply martian filter for a paf file\n");
+        fprintf(stderr,"PROGRAM : \n");
+        fprintf(stderr,"\tfilterfq - apply martian filter for a fastq file\n");
+        fprintf(stderr,"\tfilterpaf - apply martian filter for a paf file\n");
+        fprintf(stderr,"\tcomparesam, - compare two sam files\n");
+        fprintf(stderr,"\tolp, - find exact overlaps in reads in a fastq\n");
         exit(EXIT_FAILURE);
     }
 
