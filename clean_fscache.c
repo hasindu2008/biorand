@@ -9,7 +9,7 @@
 
 
 //cleans the disk cache of Linux O/S (see https://www.tecmint.com/clear-ram-memory-cache-buffer-and-swap-space-on-linux/)
-//the resultant the binary can be added +s permission to be run from a non-root user; eg, sudo chmod +s clean_fscache 
+//the resultant the binary can be added +s permission to be run from a non-root user; eg, sudo chown root:root clean_fscache && sudo chmod +s clean_fscache 
 
 #define DROP_CACHE "/proc/sys/vm/drop_caches"
 
