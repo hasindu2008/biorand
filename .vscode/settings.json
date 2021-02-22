@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.awk": "shellscript",
         "*.tcc": "c",
         "cctype": "c",
         "clocale": "c",
@@ -25,6 +26,7 @@
         "typeinfo": "c",
         "zlib.h": "c",
         "misc.h": "c",
-        "biorand.h": "c"
+        "biorand.h": "c",
+        "unistd.h": "c"
     }
 }

@@ -6,9 +6,9 @@
 // #include <htslib/sam.h>
 
 //option flags
-// #define F5C_PRINT_RAW 0x001     
-// #define F5C_SECONDARY_YES 0x002 
-// #define F5C_SKIP_UNREADABLE   0x004 
+// #define F5C_PRINT_RAW 0x001
+// #define F5C_SECONDARY_YES 0x002
+// #define F5C_SKIP_UNREADABLE   0x004
 // #define F5C_PRINT_EVENTS 0x008
 // #define F5C_PRINT_BANDED_ALN 0x010
 // #define F5C_PRINT_SCALING 0x020
@@ -25,7 +25,7 @@
 #define STEAL_THRESH 5
 
 //#define IO_PROC_INTERLEAVE 1
-//#define SECTIONAL_BENCHMARK 1   
+//#define SECTIONAL_BENCHMARK 1
 
 typedef struct {
     uint32_t flag;
@@ -91,5 +91,6 @@ void filterpaf(int argc, char* argv[]);
 void  filterfq(int argc, char* argv[]);
 void  comparesam(int argc, char* argv[]);
 void olp(int argc, char **argv);
+void idat(int argc, char **argv);
 
 #endif

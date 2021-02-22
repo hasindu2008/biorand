@@ -1,6 +1,11 @@
 #ifndef F5CMISC_H
 #define F5CMISC_H
 
+#include <sys/resource.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <errno.h>
+
 // taken from minimap2/misc
 static inline double realtime(void) {
     struct timeval tp;

@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
-#include <errno.h> 
+#include <errno.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 
@@ -34,15 +34,19 @@ void sig_handler(int sig) {
 }
 
 int main(int argc, char* argv[]) {
-    
+
     double realtime0 = realtime();
 
     signal(SIGSEGV, sig_handler);
 
     if(argc<2){
         fprintf(stderr,"Usage: %s [PROGRAM] [OPTIONS]\n",argv[0]);
-        fprintf(stderr,"PROGRAM : \n\tfilterfq - apply martian filter for a fastq file\n\tfilterpaf - apply martian filter for a paf file\n");
-        exit(EXIT_FAILURE);
+        fprintf(stderr,"PROGRAM : \n");
+        fprintf(stderr,"\tfilterfq - apply martian filter for a fastq file\n");
+        fprintf(stderr,"\tfilterpaf - apply martian filter for a paf file\n");
+        fprintf(stderr,"\tcomparesam, - compare two sam files\n");
+        fprintf(stderr,"\tolp, - find exact overlaps in reads in a fastq\n");
+        fprintf(stderr,"\tidat, - read illumina idat methylation files and prints to stdout in tsv\n");        exit(EXIT_FAILURE);
     }
     else if(strcmp(argv[1],"filterfq")==0){
         filterfq(argc, argv);
@@ -56,6 +60,9 @@ int main(int argc, char* argv[]) {
     else if(strcmp(argv[1],"olp")==0){
         olp(argc-1, &argv[1]);
     }
+	else if(strcmp(argv[1],"idat")==0){
+		idat(argc-1, &argv[1]);
+	}
     else{
         fprintf(stderr,"Unknown program %s\nUsage: %s [PROGRAM] [OPTIONS]\n",argv[1],argv[0]);
         fprintf(stderr,"PROGRAM : \n");
@@ -63,6 +70,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,"\tfilterpaf - apply martian filter for a paf file\n");
         fprintf(stderr,"\tcomparesam, - compare two sam files\n");
         fprintf(stderr,"\tolp, - find exact overlaps in reads in a fastq\n");
+        fprintf(stderr,"\tidat, - read illumina idat methylation files and prints to stdout in tsv\n");
         exit(EXIT_FAILURE);
     }
 
@@ -88,5 +96,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
-
