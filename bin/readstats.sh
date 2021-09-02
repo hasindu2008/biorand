@@ -34,9 +34,9 @@ then
     echo "Total reads:"
     echo "$($CAT $filename | wc -l)/4" | bc
 
-    #Get mean and max rlends from a fastq
-    echo "mean and max read lengths"
-    $CAT $filename | awk '{if(NR%4==2) {print length($0)}}'  | datamash mean 1 max 1
+    #Get median mean and max rlends from a fastq
+    echo "median mean and max read lengths"
+    $CAT $filename | awk '{if(NR%4==2) {print length($0)}}'  | datamash median 1 mean 1 max 1
 
 elif [ $extension = "fasta"  -o $extension = "fa" ]
 then
