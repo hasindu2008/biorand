@@ -22,4 +22,4 @@ datamash --version > /dev/null || die "datamash not found in PATH"
 
 OUTPUT=$(minimap2 -cx map-ont $1 -t8 --secondary=no ${FASTQ} | awk '{print $10/$11}' | datamash mean 1 sstdev 1 q1 1 median 1 q3 1)
 echo -en "sample\tmean\tsstdev\tq1\tmedian\tq3\n"
-echo -en "${FASTQ}\t$OUTPUT"
+echo -en "${FASTQ}\t$OUTPUT\n"
