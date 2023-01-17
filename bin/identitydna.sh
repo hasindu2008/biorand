@@ -5,7 +5,6 @@ if [ "$#" -ne 2 ]; then
         exit
 fi
 
-
 die() {
     local msg="${1}"
     echo "Error: ${msg}" >&2
@@ -18,7 +17,6 @@ test -e $FASTQ || die "$FASTQ does not exist"
 
 minimap2 --version > /dev/null || die "minimap2 not found in PATH"
 datamash --version > /dev/null || die "datamash not found in PATH"
-
 
 OUTPUT=$(minimap2 -cx map-ont $1 -t8 --secondary=no ${FASTQ} | awk '{print $10/$11}' | datamash mean 1 sstdev 1 q1 1 median 1 q3 1)
 echo -en "sample\tmean\tsstdev\tq1\tmedian\tq3\n"
