@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+set -o pipefail
+
 if [ "$#" -ne 2 ]; then
     echo "usage : $0 genome.fa/genome.idx reads.fastq/reads.bam"
         exit
